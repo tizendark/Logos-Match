@@ -10,12 +10,21 @@ export async function POST(
     const auth = getInsForgeServiceAuth()
     const { playerId } = await params
 
-    await dbUpdate(
-      auth,
-      'room_players',
-      { last_seen_at: new Date().toISOString(), status: 'connected' },
-      { id: `eq.${playerId}` },
-    )
+    try {
+      await dbUpdate(
+        auth,
+        'room_players',
+        { last_seen_at: new Date().toISOString(), status: 'connected' },
+        { id: `eq.${playerId}` },
+      )
+    } catch {
+      await dbUpdate(
+        auth,
+        'room_players',
+        { status: 'connected' },
+        { id: `eq.${playerId}` },
+      )
+    }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
@@ -23,4 +32,3 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
-
