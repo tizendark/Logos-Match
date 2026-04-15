@@ -20,6 +20,28 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## InsForge (MVP setup)
+
+The `/api/templates` and `/api/rooms` endpoints require DB tables to exist in InsForge.
+
+1. Open your InsForge Dashboard.
+2. Go to SQL Editor / Query Console.
+3. Run the schema script: [001_quizzes.sql](file:///workspace/logos-match/insforge/schema/001_quizzes.sql).
+4. (Optional) Seed example templates: [003_seed_templates.sql](file:///workspace/logos-match/insforge/schema/003_seed_templates.sql).
+
+RLS note: do not run [002_rls.sql](file:///workspace/logos-match/insforge/schema/002_rls.sql) until you have policies in place (or you are certain your server key bypasses it and you understand the implications).
+
+### Environment variables
+
+Server-only (Vercel / local):
+- `INSFORGE_URL`
+- `INSFORGE_SERVICE_KEY`
+
+NVIDIA NIM (server-only):
+- `NVIDIA_NIM_API_KEY`
+- `NVIDIA_NIM_MODEL` (optional)
+- `NVIDIA_NIM_BASE_URL` (optional)
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
