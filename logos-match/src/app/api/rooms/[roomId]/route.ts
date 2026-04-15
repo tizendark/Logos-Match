@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { dbSelect, getInsForgeServiceAuth } from '@/lib/insforgeDb'
+import { dbSelect, dbUpdate, getInsForgeServiceAuth } from '@/lib/insforgeDb'
 import type { Room, RoomPlayer } from '@/lib/models/quiz'
 
 export async function GET(
@@ -18,9 +18,24 @@ export async function GET(
     })
     const room = rooms[0] ?? null
 
+    const cutoff = new Date(Date.now() - 90_000).toISOString()
+    try {
+      await dbUpdate(
+        auth,
+        'room_players',
+        { status: 'disconnected' },
+        {
+          room_id: `eq.${roomId}`,
+          status: 'eq.connected',
+          last_seen_at: `lt.${cutoff}`,
+        },
+      )
+    } catch {}
+
     const players = await dbSelect<RoomPlayer>(auth, 'room_players', {
       select: '*',
       room_id: `eq.${roomId}`,
+      status: 'eq.connected',
       order: 'created_at.asc',
     })
 

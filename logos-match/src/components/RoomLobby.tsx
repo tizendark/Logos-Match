@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 
+import { useHostToken } from '@/hooks/useHostToken'
 import type { Room, RoomPlayer } from '@/lib/models/quiz'
 
 type LobbyData = {
@@ -9,9 +10,17 @@ type LobbyData = {
   players: RoomPlayer[]
 }
 
-export function RoomLobby({ roomId }: { roomId: string }) {
+export function RoomLobby({
+  roomId,
+  playerId,
+}: {
+  roomId: string
+  playerId?: string
+}) {
+  const hostToken = useHostToken()
   const [data, setData] = useState<LobbyData>({ room: null, players: [] })
   const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +54,66 @@ export function RoomLobby({ roomId }: { roomId: string }) {
     }
   }, [roomId])
 
+  useEffect(() => {
+    if (!playerId) return
+
+    let cancelled = false
+
+    async function heartbeat() {
+      if (cancelled) return
+      await fetch(`/api/players/${playerId}/heartbeat`, {
+        method: 'POST',
+        cache: 'no-store',
+      }).catch(() => {})
+    }
+
+    function leave() {
+      fetch(`/api/players/${playerId}/leave`, {
+        method: 'POST',
+        cache: 'no-store',
+        keepalive: true,
+      }).catch(() => {})
+    }
+
+    heartbeat()
+    const interval = window.setInterval(heartbeat, 10_000)
+    window.addEventListener('beforeunload', leave)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('beforeunload', leave)
+      leave()
+    }
+  }, [playerId])
+
+  const isHost = useMemo(() => {
+    if (!hostToken) return false
+    if (!data.room) return false
+    return data.room.host_token === hostToken
+  }, [data.room, hostToken])
+
+  function startGame() {
+    if (!hostToken) return
+    setError(null)
+    startTransition(async () => {
+      const response = await fetch(`/api/rooms/${roomId}/start`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostToken }),
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        setError(payload?.error ?? 'No se pudo iniciar la partida')
+        return
+      }
+
+      const payload = (await response.json()) as { room: Room }
+      setData((prev) => ({ ...prev, room: payload.room ?? prev.room }))
+    })
+  }
+
   const code = data.room?.code ?? '—'
   const status = data.room?.status ?? 'lobby'
 
@@ -57,6 +126,16 @@ export function RoomLobby({ roomId }: { roomId: string }) {
             Código: <span className="font-semibold text-zinc-950">{code}</span>
           </p>
           <p className="mt-1 text-xs text-zinc-500">Estado: {status}</p>
+          {isHost && status === 'lobby' ? (
+            <button
+              type="button"
+              className="mt-4 w-full rounded-xl bg-zinc-950 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+              onClick={startGame}
+              disabled={isPending}
+            >
+              Iniciar partida
+            </button>
+          ) : null}
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -82,4 +161,3 @@ export function RoomLobby({ roomId }: { roomId: string }) {
     </div>
   )
 }
-

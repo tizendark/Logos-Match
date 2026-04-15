@@ -53,6 +53,7 @@ export type RoomPlayer = {
   name: string
   score: number
   status: 'connected' | 'disconnected'
+  last_seen_at?: string
   created_at: string
 }
 
@@ -79,4 +80,3 @@ export type QuizDraft = {
   title: string
   questions: QuizDraftQuestion[]
 }
-

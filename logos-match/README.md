@@ -28,6 +28,7 @@ The `/api/templates` and `/api/rooms` endpoints require DB tables to exist in In
 2. Go to SQL Editor / Query Console.
 3. Run the schema script: [001_quizzes.sql](file:///workspace/logos-match/insforge/schema/001_quizzes.sql).
 4. (Optional) Seed example templates: [003_seed_templates.sql](file:///workspace/logos-match/insforge/schema/003_seed_templates.sql).
+5. Presence (player auto-disconnect): [004_player_presence.sql](file:///workspace/logos-match/insforge/schema/004_player_presence.sql).
 
 RLS note: do not run [002_rls.sql](file:///workspace/logos-match/insforge/schema/002_rls.sql) until you have policies in place (or you are certain your server key bypasses it and you understand the implications).
 
