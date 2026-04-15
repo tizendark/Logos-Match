@@ -35,47 +35,51 @@ function normalizeQuestions(input: unknown): QuizDraftQuestion[] | null {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null
+  try {
+    const body = (await request.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null
 
-  const hostToken = typeof body?.hostToken === 'string' ? body.hostToken : ''
-  const title = typeof body?.title === 'string' ? body.title.trim() : ''
-  const questions = normalizeQuestions(body?.questions)
+    const hostToken = typeof body?.hostToken === 'string' ? body.hostToken : ''
+    const title = typeof body?.title === 'string' ? body.title.trim() : ''
+    const questions = normalizeQuestions(body?.questions)
 
-  if (!hostToken || !title || !questions || questions.length === 0) {
-    return NextResponse.json(
-      { error: 'Invalid request body' },
-      { status: 400 },
+    if (!hostToken || !title || !questions || questions.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 },
+      )
+    }
+
+    const auth = getInsForgeServiceAuth()
+
+    const createdQuiz = await dbInsert<CustomQuiz | CustomQuiz[]>(
+      auth,
+      'custom_quizzes',
+      { title, host_token: hostToken },
+      { select: '*' },
     )
+    const quiz = Array.isArray(createdQuiz) ? createdQuiz[0] : createdQuiz
+
+    const payload = questions.map((q) => ({
+      quiz_id: quiz.id,
+      prompt: q.prompt,
+      options: q.options,
+      correct_index: q.correctIndex,
+      explanation: q.explanation ?? null,
+    }))
+
+    const createdQuestions = await dbInsert<CustomQuizQuestion[]>(
+      auth,
+      'custom_quiz_questions',
+      payload,
+      { select: '*' },
+    )
+
+    return NextResponse.json({ quiz, questions: createdQuestions })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  const auth = getInsForgeServiceAuth()
-
-  const createdQuiz = await dbInsert<CustomQuiz | CustomQuiz[]>(
-    auth,
-    'custom_quizzes',
-    { title, host_token: hostToken },
-    { select: '*' },
-  )
-  const quiz = Array.isArray(createdQuiz) ? createdQuiz[0] : createdQuiz
-
-  const payload = questions.map((q) => ({
-    quiz_id: quiz.id,
-    prompt: q.prompt,
-    options: q.options,
-    correct_index: q.correctIndex,
-    explanation: q.explanation ?? null,
-  }))
-
-  const createdQuestions = await dbInsert<CustomQuizQuestion[]>(
-    auth,
-    'custom_quiz_questions',
-    payload,
-    { select: '*' },
-  )
-
-  return NextResponse.json({ quiz, questions: createdQuestions })
 }
-
