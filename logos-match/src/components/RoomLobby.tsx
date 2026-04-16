@@ -37,6 +37,7 @@ export function RoomLobby({ roomId }: { roomId: string }) {
         if (response.status === 404) {
           if (!isHost) {
             window.alert('La sala ha sido cerrada por el anfitrión.')
+            localStorage.removeItem('logosmatch_player_session')
           }
           router.push('/')
           return

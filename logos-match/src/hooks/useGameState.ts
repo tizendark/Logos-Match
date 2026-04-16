@@ -71,6 +71,7 @@ export function useGameState(
       .on('broadcast', { event: 'room_cancelled' }, () => {
         if (!isHost) {
           window.alert('La partida ha sido cerrada por el anfitrión.')
+          localStorage.removeItem('logosmatch_player_session')
           window.location.href = '/'
         }
       })
