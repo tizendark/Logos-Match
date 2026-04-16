@@ -9,6 +9,7 @@ import { useHostToken } from '@/hooks/useHostToken'
 import { checkWinner } from '@/lib/gameUtils'
 import type { GameQuestion, Room, RoomPlayer } from '@/lib/models/quiz'
 import { QuestionView } from '@/components/QuestionView'
+import { ScoreBoard } from '@/components/ScoreBoard'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -128,6 +129,73 @@ export function GameView({ roomId }: { roomId: string }) {
     })
   }
 
+  // Lógica de avance automático para el Host
+  useEffect(() => {
+    if (!isHost) return
+
+    let timeout: number | null = null
+
+    // Si la fase es Triqui y hay un resultado definitivo, esperar 5s y avanzar
+    if (gameState.phase === 'TRIQUI' && (winResult.winner || winResult.isDraw)) {
+      timeout = window.setTimeout(() => {
+        if (winResult.winner && questions[gameState.currentQuestionIndex]) {
+          updateGameState({
+            phase: 'QUESTION',
+            triquiWinnerId: winResult.winner,
+          })
+        } else {
+          // Si fue empate o no hay más preguntas, resetear el tablero para otra ronda
+          updateGameState({
+            board: Array(9).fill(null),
+            turn: gameState.playerO,
+          })
+        }
+      }, 5000)
+    }
+
+    // Si la fase es Question y la respuesta ya fue revelada, esperar 5s y volver a Triqui
+    if (gameState.phase === 'QUESTION' && gameState.questionRevealed) {
+      const currentQuestion = questions[gameState.currentQuestionIndex]
+      timeout = window.setTimeout(() => {
+        if (!currentQuestion) return
+        const isCorrect = gameState.questionAnswer === currentQuestion.correct_index
+        const newScore = { ...gameState.score }
+        
+        if (isCorrect && gameState.triquiWinnerId) {
+          newScore[gameState.triquiWinnerId] = (newScore[gameState.triquiWinnerId] || 0) + 100
+        }
+
+        updateGameState({
+          phase: 'TRIQUI',
+          board: Array(9).fill(null),
+          turn: gameState.playerO, // Alternar inicio de ronda
+          score: newScore,
+          currentQuestionIndex: gameState.currentQuestionIndex + 1,
+          triquiWinnerId: null,
+          questionAnswer: null,
+          questionRevealed: false,
+        })
+      }, 5000)
+    }
+
+    return () => {
+      if (timeout) window.clearTimeout(timeout)
+    }
+  }, [
+    isHost,
+    gameState.phase,
+    winResult.winner,
+    winResult.isDraw,
+    gameState.questionRevealed,
+    gameState.currentQuestionIndex,
+    gameState.questionAnswer,
+    gameState.triquiWinnerId,
+    gameState.score,
+    gameState.playerO,
+    questions,
+    updateGameState,
+  ])
+
   function handleAnswer(index: number, answerPlayerId: string | null) {
     if (!isHost) {
       if (answerPlayerId === gameState.triquiWinnerId) {
@@ -159,7 +227,9 @@ export function GameView({ roomId }: { roomId: string }) {
 
     return (
       <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
-        <main className="w-full max-w-md space-y-6">
+        <main className="flex w-full max-w-md flex-col gap-6">
+          <ScoreBoard players={players} score={gameState.score} />
+
           <QuestionView
             question={currentQuestion}
             playerId={playerId}
@@ -224,7 +294,9 @@ export function GameView({ roomId }: { roomId: string }) {
 
   return (
     <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
-      <main className="w-full max-w-md space-y-6">
+      <main className="flex w-full max-w-md flex-col gap-6">
+        <ScoreBoard players={players} score={gameState.score} />
+
         <div className="text-center">
           <h1 className="text-xl font-bold tracking-tight">Triqui</h1>
           {winResult.winner ? (
