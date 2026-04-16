@@ -7,7 +7,8 @@ import { TicTacToeBoard } from '@/components/TicTacToeBoard'
 import { useGameState } from '@/hooks/useGameState'
 import { useHostToken } from '@/hooks/useHostToken'
 import { checkWinner } from '@/lib/gameUtils'
-import type { Room, RoomPlayer } from '@/lib/models/quiz'
+import type { GameQuestion, Room, RoomPlayer } from '@/lib/models/quiz'
+import { QuestionView } from '@/components/QuestionView'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -15,6 +16,7 @@ export function GameView({ roomId }: { roomId: string }) {
   const playerId = searchParams.get('playerId')
   const [room, setRoom] = useState<Room | null>(null)
   const [players, setPlayers] = useState<RoomPlayer[]>([])
+  const [questions, setQuestions] = useState<GameQuestion[]>([])
   const [loading, setLoading] = useState(true)
 
   // Asumimos isHost si tenemos hostToken en localStorage,
@@ -26,8 +28,12 @@ export function GameView({ roomId }: { roomId: string }) {
     isHost,
     (action: unknown) => {
       const act = action as { type?: string; index?: number; playerId?: string }
-      if (isHost && act?.type === 'PLAYER_MOVE' && typeof act.index === 'number') {
+      if (!isHost) return
+
+      if (act?.type === 'PLAYER_MOVE' && typeof act.index === 'number') {
         handleMove(act.index, act.playerId ?? null)
+      } else if (act?.type === 'ANSWER_QUESTION' && typeof act.index === 'number') {
+        handleAnswer(act.index, act.playerId ?? null)
       }
     }
   )
@@ -46,6 +52,7 @@ export function GameView({ roomId }: { roomId: string }) {
         const data = await response.json()
         setRoom(data.room)
         setPlayers(data.players || [])
+        if (data.questions) setQuestions(data.questions)
 
         // Si es Host y el estado actual de la sala estaba vacío, inicializamos el juego
         if (isHost && data.room?.host_token === hostToken) {
@@ -121,10 +128,88 @@ export function GameView({ roomId }: { roomId: string }) {
     })
   }
 
+  function handleAnswer(index: number, answerPlayerId: string | null) {
+    if (!isHost) {
+      if (answerPlayerId === gameState.triquiWinnerId) {
+        sendPlayerAction({ type: 'ANSWER_QUESTION', index, playerId: answerPlayerId })
+      }
+      return
+    }
+
+    if (gameState.phase !== 'QUESTION') return
+    if (gameState.questionRevealed) return
+    if (gameState.triquiWinnerId !== answerPlayerId) return
+
+    updateGameState({ questionAnswer: index })
+  }
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-50">
         <p className="text-zinc-500">Cargando partida...</p>
+      </div>
+    )
+  }
+
+  const currentQuestion = questions[gameState.currentQuestionIndex]
+
+  if (gameState.phase === 'QUESTION' && currentQuestion) {
+    const triquiWinnerName =
+      players.find((p) => p.id === gameState.triquiWinnerId)?.name || 'Jugador'
+
+    return (
+      <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
+        <main className="w-full max-w-md space-y-6">
+          <QuestionView
+            question={currentQuestion}
+            playerId={playerId}
+            triquiWinnerId={gameState.triquiWinnerId}
+            triquiWinnerName={triquiWinnerName}
+            isHost={isHost}
+            answer={gameState.questionAnswer}
+            revealed={gameState.questionRevealed}
+            onAnswer={(index) => handleAnswer(index, isHost ? gameState.triquiWinnerId : playerId)}
+          />
+
+          {isHost ? (
+            <div className="flex flex-col gap-3">
+              {!gameState.questionRevealed ? (
+                <button
+                  onClick={() => updateGameState({ questionRevealed: true })}
+                  disabled={gameState.questionAnswer === null}
+                  className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
+                >
+                  Revelar Respuesta
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    const isCorrect = gameState.questionAnswer === currentQuestion.correct_index
+                    const newScore = { ...gameState.score }
+                    
+                    if (isCorrect && gameState.triquiWinnerId) {
+                      newScore[gameState.triquiWinnerId] = (newScore[gameState.triquiWinnerId] || 0) + 100
+                    }
+
+                    updateGameState({
+                      phase: 'TRIQUI',
+                      board: Array(9).fill(null),
+                      turn: gameState.playerO, // Alternar inicio de ronda
+                      score: newScore,
+                      currentQuestionIndex: gameState.currentQuestionIndex + 1,
+                      triquiWinnerId: null,
+                      questionAnswer: null,
+                      questionRevealed: false,
+                    })
+                  }}
+                  className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
+                >
+                  Siguiente Ronda de Triqui
+                </button>
+              )}
+            </div>
+          ) : null}
+        </main>
       </div>
     )
   }
@@ -182,18 +267,39 @@ export function GameView({ roomId }: { roomId: string }) {
         />
 
         {isHost && (winResult.winner || winResult.isDraw) ? (
-          <button
-            className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
-            onClick={() => {
-              // Resetear el tablero para otra ronda
-              updateGameState({
-                board: Array(9).fill(null),
-                turn: gameState.playerO, // Cambiar quién empieza
-              })
-            }}
-          >
-            Siguiente Ronda
-          </button>
+          <div className="flex flex-col gap-3">
+            {winResult.winner && currentQuestion ? (
+              <button
+                className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
+                onClick={() => {
+                  updateGameState({
+                    phase: 'QUESTION',
+                    triquiWinnerId: winResult.winner,
+                  })
+                }}
+              >
+                Ir a Pregunta para el Ganador
+              </button>
+            ) : null}
+
+            <button
+              className={`w-full rounded-xl px-4 py-3 font-medium shadow-sm ${
+                winResult.winner && currentQuestion
+                  ? 'bg-zinc-200 text-zinc-800' // Botón secundario si hay pregunta
+                  : 'bg-zinc-950 text-white' // Botón primario si fue empate o no hay más preguntas
+              }`}
+              onClick={() => {
+                updateGameState({
+                  board: Array(9).fill(null),
+                  turn: gameState.playerO, // Cambiar quién empieza
+                })
+              }}
+            >
+              {winResult.winner && currentQuestion
+                ? 'Omitir y Siguiente Ronda'
+                : 'Siguiente Ronda de Triqui'}
+            </button>
+          </div>
         ) : null}
       </main>
     </div>

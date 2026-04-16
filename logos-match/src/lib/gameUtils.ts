@@ -7,6 +7,10 @@ export type GameState = {
   score: Record<string, number>
   playerX: string | null
   playerO: string | null
+  currentQuestionIndex: number
+  triquiWinnerId: string | null
+  questionAnswer: number | null
+  questionRevealed: boolean
 }
 
 export type WinResult = {

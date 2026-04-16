@@ -66,6 +66,7 @@ export type GameQuestion = {
   options: string[]
   correct_index: number
   order_index: number
+  explanation?: string | null
   created_at: string
 }
 
