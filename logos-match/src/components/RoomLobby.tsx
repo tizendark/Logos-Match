@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import type { Room, RoomPlayer } from '@/lib/models/quiz'
 import { useHostToken } from '@/hooks/useHostToken'
@@ -13,6 +13,8 @@ type LobbyData = {
 
 export function RoomLobby({ roomId }: { roomId: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const playerId = searchParams.get('playerId')
   const hostToken = useHostToken()
   const [data, setData] = useState<LobbyData>({ room: null, players: [] })
   const [error, setError] = useState<string | null>(null)
@@ -54,9 +56,10 @@ export function RoomLobby({ roomId }: { roomId: string }) {
 
   useEffect(() => {
     if (data.room?.status === 'playing') {
-      router.push(`/room/${roomId}/play`)
+      const url = `/room/${roomId}/play${playerId ? `?playerId=${playerId}` : ''}`
+      router.push(url)
     }
-  }, [data.room?.status, router, roomId])
+  }, [data.room?.status, router, roomId, playerId])
 
   async function handleStartGame() {
     if (!hostToken || starting) return

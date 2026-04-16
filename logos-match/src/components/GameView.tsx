@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 import { TicTacToeBoard } from '@/components/TicTacToeBoard'
 import { useGameState } from '@/hooks/useGameState'
@@ -10,6 +11,8 @@ import type { Room, RoomPlayer } from '@/lib/models/quiz'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
+  const searchParams = useSearchParams()
+  const playerId = searchParams.get('playerId')
   const [room, setRoom] = useState<Room | null>(null)
   const [players, setPlayers] = useState<RoomPlayer[]>([])
   const [loading, setLoading] = useState(true)
@@ -18,7 +21,7 @@ export function GameView({ roomId }: { roomId: string }) {
   // luego validaremos con la sala real.
   const isHost = Boolean(hostToken)
 
-  const { gameState, updateGameState } = useGameState(
+  const { gameState, updateGameState, sendPlayerAction } = useGameState(
     roomId,
     isHost,
     (action: unknown) => {
@@ -91,20 +94,26 @@ export function GameView({ roomId }: { roomId: string }) {
 
   const winResult = checkWinner(gameState.board)
 
-  // Función de movimiento. En este MVP, permitimos que el Host haga clic en el tablero
-  // en nombre de los jugadores, o bien para probar localmente.
-  // En un entorno real, los jugadores envían `PLAYER_MOVE` vía sendPlayerAction.
-  function handleMove(index: number, playerId: string | null = gameState.turn) {
-    if (!isHost) return
+  // Función de movimiento. 
+  // Los jugadores envían `PLAYER_MOVE` vía sendPlayerAction.
+  // El Host actualiza el estado directamente si es él quien hace el click.
+  function handleMove(index: number, movePlayerId: string | null) {
+    if (!isHost) {
+      if (movePlayerId === gameState.turn) {
+        sendPlayerAction({ type: 'PLAYER_MOVE', index, playerId: movePlayerId })
+      }
+      return
+    }
+
     if (winResult.winner || winResult.isDraw) return
     if (gameState.board[index]) return
-    if (gameState.turn !== playerId) return // No es su turno
+    if (gameState.turn !== movePlayerId) return // No es su turno
 
     const newBoard = [...gameState.board]
-    newBoard[index] = playerId
+    newBoard[index] = movePlayerId
 
     const newTurn =
-      playerId === gameState.playerX ? gameState.playerO : gameState.playerX
+      movePlayerId === gameState.playerX ? gameState.playerO : gameState.playerX
 
     updateGameState({
       board: newBoard,
@@ -165,8 +174,8 @@ export function GameView({ roomId }: { roomId: string }) {
 
         <TicTacToeBoard
           board={gameState.board}
-          onMove={(index) => handleMove(index)}
-          disabled={!isHost || !!winResult.winner || winResult.isDraw}
+          onMove={(index) => handleMove(index, isHost ? gameState.turn : playerId)}
+          disabled={(!isHost && playerId !== gameState.turn) || !!winResult.winner || winResult.isDraw}
           winnerLine={winResult.line}
           player1Id={gameState.playerX}
           player2Id={gameState.playerO}
