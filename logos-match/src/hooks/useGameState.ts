@@ -23,10 +23,16 @@ export function useGameState(
 
   const channelRef = useRef<RealtimeChannel | null>(null)
   const gameStateRef = useRef<GameState>(gameState)
-  gameStateRef.current = gameState
   
   const onPlayerActionRef = useRef(onPlayerAction)
-  onPlayerActionRef.current = onPlayerAction
+
+  useEffect(() => {
+    gameStateRef.current = gameState
+  }, [gameState])
+
+  useEffect(() => {
+    onPlayerActionRef.current = onPlayerAction
+  }, [onPlayerAction])
 
   useEffect(() => {
     if (!supabase || !roomId) return

@@ -44,6 +44,7 @@ export type Room = {
   host_token: string
   status: RoomStatus
   game_config: unknown
+  current_state: unknown
   created_at: string
 }
 
