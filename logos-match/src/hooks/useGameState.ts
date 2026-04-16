@@ -1,25 +1,100 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createClient, type RealtimeChannel } from '@supabase/supabase-js'
 
-import type { GameConfig } from '@/lib/gameConfig'
+import { insforgeConfig } from '@/lib/insforge'
+import type { GameState } from '@/lib/gameUtils'
 
-export type GameRole = 'host' | 'player'
-export type RoomStatus = 'lobby' | 'playing' | 'results' | 'ended'
+const supabase =
+  insforgeConfig.url && insforgeConfig.anonKey
+    ? createClient(insforgeConfig.url, insforgeConfig.anonKey)
+    : null
 
-export type PlayerState = {
-  id: string
-  name: string
-  score: number
-  status: 'connected' | 'disconnected'
-}
+export function useGameState(
+  roomId: string,
+  isHost: boolean,
+  onPlayerAction?: (action: unknown) => void,
+) {
+  const [gameState, setGameState] = useState<GameState>({
+    phase: 'LOBBY',
+    board: Array(9).fill(null),
+    turn: null,
+    score: {},
+  })
 
-export type RoomState = {
-  roomId: string
-  status: RoomStatus
-  hostId: string | null
-  players: PlayerState[]
-  gameConfig: GameConfig
-}
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  const gameStateRef = useRef<GameState>(gameState)
+  gameStateRef.current = gameState
+  
+  const onPlayerActionRef = useRef(onPlayerAction)
+  onPlayerActionRef.current = onPlayerAction
 
-export function useGameState() {
-  return useState<RoomState | null>(null)
+  useEffect(() => {
+    if (!supabase || !roomId) return
+
+    const channel = supabase.channel(`room:${roomId}`, {
+      config: {
+        broadcast: { ack: false, self: true },
+      },
+    })
+    channelRef.current = channel
+
+    channel
+      .on('broadcast', { event: 'sync_state' }, (payload) => {
+        setGameState(payload.payload)
+      })
+      .on('broadcast', { event: 'sync_request' }, () => {
+        if (isHost) {
+          channel.send({
+            type: 'broadcast',
+            event: 'sync_state',
+            payload: gameStateRef.current,
+          })
+        }
+      })
+      .on('broadcast', { event: 'player_action' }, (payload) => {
+        if (isHost && onPlayerActionRef.current) {
+          onPlayerActionRef.current(payload.payload)
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (!isHost) {
+            channel.send({
+              type: 'broadcast',
+              event: 'sync_request',
+            })
+          }
+        }
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [roomId, isHost])
+
+  const updateGameState = (newState: Partial<GameState>) => {
+    if (!isHost) return
+    const nextState = { ...gameStateRef.current, ...newState }
+    setGameState(nextState)
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'sync_state',
+        payload: nextState,
+      })
+    }
+  }
+
+  const sendPlayerAction = (action: unknown) => {
+    if (isHost) return
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'player_action',
+        payload: action,
+      })
+    }
+  }
+
+  return { gameState, updateGameState, sendPlayerAction }
 }
