@@ -26,6 +26,7 @@ export function GameView({ roomId }: { roomId: string }) {
   // luego validaremos con la sala real.
   const isHost = Boolean(hostToken)
   const [closing, setClosing] = useState(false)
+  const [showTurnModal, setShowTurnModal] = useState(false)
 
   // Iniciar latidos para el jugador si no es Host
   usePlayerPresence(!isHost ? playerId : null)
@@ -44,6 +45,25 @@ export function GameView({ roomId }: { roomId: string }) {
       }
     }
   )
+
+  // Finalizar partida si quedan menos de 2 jugadores en la sala
+  useEffect(() => {
+    if (!isHost) return
+    if (loading) return
+    if (players.length < 2 && !closing) {
+      handleCloseGame()
+    }
+  }, [isHost, loading, players.length, closing]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Disparar modal cuando el tablero se limpia y hay un turno asignado
+  useEffect(() => {
+    if (gameState.phase === 'TRIQUI' && gameState.turn) {
+      const empty = gameState.board.every((cell) => cell === null)
+      if (empty) {
+        setShowTurnModal(true)
+      }
+    }
+  }, [gameState.board, gameState.turn, gameState.phase])
 
   useEffect(() => {
     async function load() {
@@ -331,7 +351,30 @@ export function GameView({ roomId }: { roomId: string }) {
   const isPlayerOTurn = gameState.turn === gameState.playerO
 
   return (
-    <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
+    <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950 relative">
+      {/* Modal de inicio de ronda */}
+      {showTurnModal ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-xl">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-900">
+              ¡Nueva Ronda!
+            </h2>
+            <p className="mt-3 text-zinc-600">
+              Es el turno de empezar para:
+            </p>
+            <p className="mt-2 text-3xl font-black text-blue-600">
+              {isPlayerXTurn ? playerXName : isPlayerOTurn ? playerOName : '—'}
+            </p>
+            <button
+              onClick={() => setShowTurnModal(false)}
+              className="mt-8 w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
+            >
+              ¡Entendido!
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <main className="flex w-full max-w-md flex-col gap-6">
         <div className="flex items-start justify-between gap-4">
           <ScoreBoard players={players} score={gameState.score} />
@@ -367,15 +410,58 @@ export function GameView({ roomId }: { roomId: string }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm">
-          <div className={`flex flex-col items-center ${isPlayerXTurn && !winResult.winner ? 'opacity-100' : 'opacity-50'}`}>
-            <div className="text-xl font-bold text-blue-500">X</div>
-            <span className="text-xs font-medium">{playerXName}</span>
+        <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm relative overflow-hidden">
+          <div
+            className={`absolute bottom-0 left-0 h-1 w-1/2 bg-blue-500 transition-all duration-300 ${
+              isPlayerXTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+          <div
+            className={`absolute bottom-0 right-0 h-1 w-1/2 bg-rose-500 transition-all duration-300 ${
+              isPlayerOTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+
+          <div
+            className={`flex flex-col items-center transition-all duration-300 ${
+              isPlayerXTurn && !winResult.winner
+                ? 'scale-110 opacity-100 drop-shadow-md'
+                : 'scale-90 opacity-40'
+            }`}
+          >
+            <div className="text-xl font-black text-blue-500">X</div>
+            <span
+              className={`text-xs ${
+                isPlayerXTurn && !winResult.winner
+                  ? 'font-bold text-blue-600'
+                  : 'font-medium text-zinc-500'
+              }`}
+            >
+              {playerXName}
+            </span>
           </div>
-          <div className="text-xs text-zinc-400">vs</div>
-          <div className={`flex flex-col items-center ${isPlayerOTurn && !winResult.winner ? 'opacity-100' : 'opacity-50'}`}>
-            <div className="text-xl font-bold text-rose-500">O</div>
-            <span className="text-xs font-medium">{playerOName}</span>
+
+          <div className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-400">
+            VS
+          </div>
+
+          <div
+            className={`flex flex-col items-center transition-all duration-300 ${
+              isPlayerOTurn && !winResult.winner
+                ? 'scale-110 opacity-100 drop-shadow-md'
+                : 'scale-90 opacity-40'
+            }`}
+          >
+            <div className="text-xl font-black text-rose-500">O</div>
+            <span
+              className={`text-xs ${
+                isPlayerOTurn && !winResult.winner
+                  ? 'font-bold text-rose-600'
+                  : 'font-medium text-zinc-500'
+              }`}
+            >
+              {playerOName}
+            </span>
           </div>
         </div>
 
