@@ -31,9 +31,13 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+
     const players = await dbSelect<RoomPlayer>(auth, 'room_players', {
       select: '*',
       room_id: `eq.${roomId}`,
+      status: 'eq.connected',
+      last_seen_at: `gte.${twoMinutesAgo}`,
       order: 'created_at.asc',
     })
 

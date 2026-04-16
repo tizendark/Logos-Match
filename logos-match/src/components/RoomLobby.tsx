@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 import type { Room, RoomPlayer } from '@/lib/models/quiz'
 import { useHostToken } from '@/hooks/useHostToken'
+import { usePlayerPresence } from '@/hooks/usePlayerPresence'
 
 type LobbyData = {
   room: Room | null
@@ -23,6 +24,9 @@ export function RoomLobby({ roomId }: { roomId: string }) {
   const [deleting, setDeleting] = useState(false)
 
   const isHost = Boolean(hostToken && data.room?.host_token === hostToken)
+  
+  // Iniciar latidos para el jugador si no es Host
+  usePlayerPresence(!isHost ? playerId : null)
 
   useEffect(() => {
     let cancelled = false

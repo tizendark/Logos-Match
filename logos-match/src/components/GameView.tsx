@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { TicTacToeBoard } from '@/components/TicTacToeBoard'
 import { useGameState } from '@/hooks/useGameState'
 import { useHostToken } from '@/hooks/useHostToken'
+import { usePlayerPresence } from '@/hooks/usePlayerPresence'
 import { checkWinner } from '@/lib/gameUtils'
 import type { GameQuestion, Room, RoomPlayer } from '@/lib/models/quiz'
 import { QuestionView } from '@/components/QuestionView'
@@ -25,6 +26,9 @@ export function GameView({ roomId }: { roomId: string }) {
   // luego validaremos con la sala real.
   const isHost = Boolean(hostToken)
   const [closing, setClosing] = useState(false)
+
+  // Iniciar latidos para el jugador si no es Host
+  usePlayerPresence(!isHost ? playerId : null)
 
   const { gameState, updateGameState, sendPlayerAction, closeRoomBroadcast } = useGameState(
     roomId,
