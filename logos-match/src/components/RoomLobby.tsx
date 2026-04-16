@@ -20,6 +20,8 @@ export function RoomLobby({ roomId }: { roomId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
 
+  const [deleting, setDeleting] = useState(false)
+
   const isHost = Boolean(hostToken && data.room?.host_token === hostToken)
 
   useEffect(() => {
@@ -28,6 +30,13 @@ export function RoomLobby({ roomId }: { roomId: string }) {
     async function load() {
       try {
         const response = await fetch(`/api/rooms/${roomId}`, { cache: 'no-store' })
+        if (response.status === 404) {
+          if (!isHost) {
+            window.alert('La sala ha sido cerrada por el anfitrión.')
+          }
+          router.push('/')
+          return
+        }
         if (!response.ok) {
           const payload = await response.json().catch(() => null)
           throw new Error(payload?.error ?? 'No se pudo cargar la sala')
@@ -52,7 +61,7 @@ export function RoomLobby({ roomId }: { roomId: string }) {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [roomId])
+  }, [roomId, isHost, router])
 
   useEffect(() => {
     if (data.room?.status === 'playing') {
@@ -79,6 +88,30 @@ export function RoomLobby({ roomId }: { roomId: string }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
       setStarting(false)
+    }
+  }
+
+  async function handleDeleteRoom() {
+    if (!hostToken || deleting) return
+    const confirm = window.confirm('¿Seguro que deseas eliminar esta sala?')
+    if (!confirm) return
+
+    setDeleting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostToken }),
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(payload?.error ?? 'No se pudo eliminar la sala')
+      }
+      router.push('/')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error desconocido')
+      setDeleting(false)
     }
   }
 
@@ -115,13 +148,22 @@ export function RoomLobby({ roomId }: { roomId: string }) {
         </div>
 
         {isHost && status === 'lobby' ? (
-          <button
-            onClick={handleStartGame}
-            disabled={starting || data.players.length < 2}
-            className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
-          >
-            {starting ? 'Iniciando...' : 'Iniciar partida'}
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleStartGame}
+              disabled={starting || deleting || data.players.length < 2}
+              className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
+            >
+              {starting ? 'Iniciando...' : 'Iniciar partida'}
+            </button>
+            <button
+              onClick={handleDeleteRoom}
+              disabled={starting || deleting}
+              className="w-full rounded-xl bg-red-50 px-4 py-3 font-medium text-red-600 shadow-sm hover:bg-red-100 disabled:opacity-50"
+            >
+              {deleting ? 'Eliminando...' : 'Eliminar sala'}
+            </button>
+          </div>
         ) : null}
 
         {isHost && data.players.length < 2 ? (

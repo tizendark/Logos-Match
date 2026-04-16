@@ -10,6 +10,7 @@ import { checkWinner } from '@/lib/gameUtils'
 import type { GameQuestion, Room, RoomPlayer } from '@/lib/models/quiz'
 import { QuestionView } from '@/components/QuestionView'
 import { ScoreBoard } from '@/components/ScoreBoard'
+import { LogOut } from 'lucide-react'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -23,8 +24,9 @@ export function GameView({ roomId }: { roomId: string }) {
   // Asumimos isHost si tenemos hostToken en localStorage,
   // luego validaremos con la sala real.
   const isHost = Boolean(hostToken)
+  const [closing, setClosing] = useState(false)
 
-  const { gameState, updateGameState, sendPlayerAction } = useGameState(
+  const { gameState, updateGameState, sendPlayerAction, closeRoomBroadcast } = useGameState(
     roomId,
     isHost,
     (action: unknown) => {
@@ -211,6 +213,26 @@ export function GameView({ roomId }: { roomId: string }) {
     updateGameState({ questionAnswer: index })
   }
 
+  async function handleCloseGame() {
+    if (!isHost || closing) return
+    const confirm = window.confirm('¿Seguro que deseas cerrar la partida sin ganadores definidos?')
+    if (!confirm) return
+
+    setClosing(true)
+    try {
+      closeRoomBroadcast()
+      await fetch(`/api/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostToken }),
+      })
+      window.location.href = '/'
+    } catch (error) {
+      console.error(error)
+      setClosing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-50">
@@ -228,7 +250,19 @@ export function GameView({ roomId }: { roomId: string }) {
     return (
       <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
         <main className="flex w-full max-w-md flex-col gap-6">
-          <ScoreBoard players={players} score={gameState.score} />
+          <div className="flex items-center justify-between">
+            <ScoreBoard players={players} score={gameState.score} />
+            {isHost ? (
+              <button
+                onClick={handleCloseGame}
+                disabled={closing}
+                className="ml-4 flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                title="Cerrar partida sin ganadores"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            ) : null}
+          </div>
 
           <QuestionView
             question={currentQuestion}
@@ -295,7 +329,19 @@ export function GameView({ roomId }: { roomId: string }) {
   return (
     <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
       <main className="flex w-full max-w-md flex-col gap-6">
-        <ScoreBoard players={players} score={gameState.score} />
+        <div className="flex items-start justify-between gap-4">
+          <ScoreBoard players={players} score={gameState.score} />
+          {isHost ? (
+            <button
+              onClick={handleCloseGame}
+              disabled={closing}
+              className="flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
+              title="Cerrar partida sin ganadores"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
 
         <div className="text-center">
           <h1 className="text-xl font-bold tracking-tight">Triqui</h1>

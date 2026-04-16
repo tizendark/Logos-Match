@@ -92,3 +92,16 @@ export async function dbUpdate<T>(
     query,
   )
 }
+
+export async function dbDelete<T>(
+  auth: InsForgeDbAuth,
+  table: string,
+  query: Record<string, string>,
+): Promise<T> {
+  return insforgeDbRequest<T>(
+    auth,
+    table,
+    { method: 'DELETE' },
+    query,
+  )
+}

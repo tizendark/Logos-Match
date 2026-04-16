@@ -68,6 +68,12 @@ export function useGameState(
           onPlayerActionRef.current(payload.payload)
         }
       })
+      .on('broadcast', { event: 'room_cancelled' }, () => {
+        if (!isHost) {
+          window.alert('La partida ha sido cerrada por el anfitrión.')
+          window.location.href = '/'
+        }
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           if (!isHost) {
@@ -108,5 +114,16 @@ export function useGameState(
     }
   }
 
-  return { gameState, updateGameState, sendPlayerAction }
+  const closeRoomBroadcast = () => {
+    if (!isHost) return
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'room_cancelled',
+        payload: {},
+      })
+    }
+  }
+
+  return { gameState, updateGameState, sendPlayerAction, closeRoomBroadcast }
 }
