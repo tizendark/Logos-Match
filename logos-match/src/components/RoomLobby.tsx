@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 import type { Room, RoomPlayer } from '@/lib/models/quiz'
+import { useHostToken } from '@/hooks/useHostToken'
 
 type LobbyData = {
   room: Room | null
@@ -10,8 +12,13 @@ type LobbyData = {
 }
 
 export function RoomLobby({ roomId }: { roomId: string }) {
+  const router = useRouter()
+  const hostToken = useHostToken()
   const [data, setData] = useState<LobbyData>({ room: null, players: [] })
   const [error, setError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+
+  const isHost = Boolean(hostToken && data.room?.host_token === hostToken)
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +52,33 @@ export function RoomLobby({ roomId }: { roomId: string }) {
     }
   }, [roomId])
 
+  useEffect(() => {
+    if (data.room?.status === 'playing') {
+      router.push(`/room/${roomId}/play`)
+    }
+  }, [data.room?.status, router, roomId])
+
+  async function handleStartGame() {
+    if (!hostToken || starting) return
+    setStarting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/start`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostToken }),
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(payload?.error ?? 'No se pudo iniciar la partida')
+      }
+      // La redirección ocurrirá en el useEffect del polling cuando status pase a 'playing'
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error desconocido')
+      setStarting(false)
+    }
+  }
+
   const code = data.room?.code ?? '—'
   const status = data.room?.status ?? 'lobby'
 
@@ -76,6 +110,22 @@ export function RoomLobby({ roomId }: { roomId: string }) {
             ) : null}
           </ul>
         </div>
+
+        {isHost && status === 'lobby' ? (
+          <button
+            onClick={handleStartGame}
+            disabled={starting || data.players.length < 2}
+            className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
+          >
+            {starting ? 'Iniciando...' : 'Iniciar partida'}
+          </button>
+        ) : null}
+
+        {isHost && data.players.length < 2 ? (
+          <p className="text-center text-xs text-zinc-500">
+            Se necesitan al menos 2 jugadores para jugar a Triqui.
+          </p>
+        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </main>

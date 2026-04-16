@@ -19,6 +19,8 @@ export function useGameState(
     board: Array(9).fill(null),
     turn: null,
     score: {},
+    playerX: null,
+    playerO: null,
   })
 
   const channelRef = useRef<RealtimeChannel | null>(null)

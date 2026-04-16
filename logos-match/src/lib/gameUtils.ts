@@ -5,6 +5,8 @@ export type GameState = {
   board: (string | null)[]
   turn: string | null // playerId or null
   score: Record<string, number>
+  playerX: string | null
+  playerO: string | null
 }
 
 export type WinResult = {
