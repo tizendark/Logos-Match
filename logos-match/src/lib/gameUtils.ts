@@ -2,15 +2,15 @@ export type GamePhase = 'LOBBY' | 'TRIQUI' | 'QUESTION' | 'RESULTS' | 'ENDED'
 
 export type GameState = {
   phase: GamePhase
-  board: (string | null)[]
-  turn: string | null // playerId or null
-  score: Record<string, number>
-  playerX: string | null
-  playerO: string | null
-  currentQuestionIndex: number
-  triquiWinnerId: string | null
-  questionAnswer: number | null
-  questionRevealed: boolean
+  board: (string | null)[] // 9 cells
+  turn: string | null // playerId ('X' or 'O' equivalents)
+  playerX?: string | null // playerId assigned to X
+  playerO?: string | null // playerId assigned to O
+  score: Record<string, number> // playerId -> score
+  currentQuestionIndex?: number
+  triquiWinnerId?: string | null
+  questionAnswer?: number | null // The option index selected
+  questionRevealed?: boolean // Host revealed the answer
 }
 
 export type WinResult = {

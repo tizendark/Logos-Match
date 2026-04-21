@@ -11,6 +11,7 @@ import { checkWinner } from '@/lib/gameUtils'
 import type { GameQuestion, Room, RoomPlayer } from '@/lib/models/quiz'
 import { QuestionView } from '@/components/QuestionView'
 import { ScoreBoard } from '@/components/ScoreBoard'
+import { ResultsView } from '@/components/ResultsView'
 import { LogOut } from 'lucide-react'
 
 export function GameView({ roomId }: { roomId: string }) {
@@ -46,16 +47,45 @@ export function GameView({ roomId }: { roomId: string }) {
     }
   )
 
-  // Finalizar partida si quedan menos de 2 jugadores en la sala
+  // Finalizar partida si no hay suficientes jugadores
   useEffect(() => {
     if (!isHost) return
     if (loading) return
-    if (players.length < 2 && !closing) {
-      handleCloseGame()
+    
+    // En Resultados, solo eliminar la sala si ya no queda nadie (todos se salieron)
+    if (gameState.phase === 'RESULTS') {
+      if (players.length === 0 && !closing) {
+        handleCloseGame()
+      }
+    } else {
+      // En pleno juego, eliminar si quedan menos de 2
+      if (players.length < 2 && !closing) {
+        handleCloseGame()
+      }
     }
-  }, [isHost, loading, players.length, closing]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isHost, loading, players.length, closing, gameState.phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Disparar modal cuando el tablero se limpia y hay un turno asignado
+  // Limpieza automática si el Host cierra la pestaña abruptamente
+  useEffect(() => {
+    if (!isHost || !hostToken) return
+
+    const handleUnload = () => {
+      fetch(`/api/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostToken }),
+        keepalive: true,
+      }).catch(() => {})
+    }
+
+    window.addEventListener('pagehide', handleUnload)
+    window.addEventListener('beforeunload', handleUnload)
+
+    return () => {
+      window.removeEventListener('pagehide', handleUnload)
+      window.removeEventListener('beforeunload', handleUnload)
+    }
+  }, [isHost, hostToken, roomId])
   useEffect(() => {
     if (gameState.phase === 'TRIQUI' && gameState.turn) {
       const empty = gameState.board.every((cell) => cell === null)
@@ -164,13 +194,19 @@ export function GameView({ roomId }: { roomId: string }) {
     // Si la fase es Triqui y hay un resultado definitivo, esperar 5s y avanzar
     if (gameState.phase === 'TRIQUI' && (winResult.winner || winResult.isDraw)) {
       timeout = window.setTimeout(() => {
-        if (winResult.winner && questions[gameState.currentQuestionIndex]) {
+        const currentQ = questions[gameState.currentQuestionIndex ?? 0]
+        if (winResult.winner && currentQ) {
           updateGameState({
             phase: 'QUESTION',
             triquiWinnerId: winResult.winner,
           })
+        } else if (!currentQ) {
+          // No hay más preguntas
+          updateGameState({
+            phase: 'RESULTS'
+          })
         } else {
-          // Si fue empate o no hay más preguntas, resetear el tablero para otra ronda
+          // Empate y sí hay preguntas, resetear tablero
           updateGameState({
             board: Array(9).fill(null),
             turn: gameState.playerO,
@@ -181,7 +217,7 @@ export function GameView({ roomId }: { roomId: string }) {
 
     // Si la fase es Question y la respuesta ya fue revelada, esperar 5s y volver a Triqui
     if (gameState.phase === 'QUESTION' && gameState.questionRevealed) {
-      const currentQuestion = questions[gameState.currentQuestionIndex]
+      const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
       timeout = window.setTimeout(() => {
         if (!currentQuestion) return
         const isCorrect = gameState.questionAnswer === currentQuestion.correct_index
@@ -191,16 +227,26 @@ export function GameView({ roomId }: { roomId: string }) {
           newScore[gameState.triquiWinnerId] = (newScore[gameState.triquiWinnerId] || 0) + 100
         }
 
-        updateGameState({
-          phase: 'TRIQUI',
-          board: Array(9).fill(null),
-          turn: gameState.playerO, // Alternar inicio de ronda
-          score: newScore,
-          currentQuestionIndex: gameState.currentQuestionIndex + 1,
-          triquiWinnerId: null,
-          questionAnswer: null,
-          questionRevealed: false,
-        })
+        const nextIndex = (gameState.currentQuestionIndex ?? 0) + 1
+        const hasMoreQuestions = nextIndex < questions.length
+
+        if (hasMoreQuestions) {
+          updateGameState({
+            phase: 'TRIQUI',
+            board: Array(9).fill(null),
+            turn: gameState.playerO, // Alternar inicio de ronda
+            score: newScore,
+            currentQuestionIndex: nextIndex,
+            triquiWinnerId: null,
+            questionAnswer: null,
+            questionRevealed: false,
+          })
+        } else {
+          updateGameState({
+            phase: 'RESULTS',
+            score: newScore,
+          })
+        }
       }, 5000)
     }
 
@@ -239,7 +285,7 @@ export function GameView({ roomId }: { roomId: string }) {
 
   async function handleCloseGame() {
     if (!isHost || closing) return
-    const confirm = window.confirm('¿Seguro que deseas cerrar la partida sin ganadores definidos?')
+    const confirm = window.confirm('¿Seguro que deseas cerrar la sesión y eliminar la sala para todos?')
     if (!confirm) return
 
     setClosing(true)
@@ -259,13 +305,36 @@ export function GameView({ roomId }: { roomId: string }) {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-zinc-50">
-        <p className="text-zinc-500">Cargando partida...</p>
+      <div className="flex flex-1 items-center justify-center bg-stone-50">
+        <p className="text-stone-500">Cargando partida...</p>
       </div>
     )
   }
 
-  const currentQuestion = questions[gameState.currentQuestionIndex]
+  if (gameState.phase === 'RESULTS') {
+    return (
+      <div className="flex flex-1 flex-col items-center bg-stone-50 px-4 py-8 text-slate-900 overflow-y-auto">
+        <ResultsView players={players} score={gameState.score} />
+        {isHost ? (
+          <div className="mt-8 w-full max-w-md px-4 pb-8">
+            <button
+              onClick={handleCloseGame}
+              disabled={closing}
+              className="w-full rounded-xl bg-red-600 px-4 py-3 text-base font-bold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              Cerrar sesión (Eliminar Sala)
+            </button>
+          </div>
+        ) : (
+          <div className="mt-8 w-full max-w-md px-4 pb-8 text-center text-stone-500">
+            Esperando a que el Host cierre la sesión...
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
 
   if (gameState.phase === 'QUESTION' && currentQuestion) {
     const triquiWinnerName =
@@ -291,12 +360,12 @@ export function GameView({ roomId }: { roomId: string }) {
           <QuestionView
             question={currentQuestion}
             playerId={playerId}
-            triquiWinnerId={gameState.triquiWinnerId}
+            triquiWinnerId={gameState.triquiWinnerId ?? null}
             triquiWinnerName={triquiWinnerName}
             isHost={isHost}
-            answer={gameState.questionAnswer}
-            revealed={gameState.questionRevealed}
-            onAnswer={(index) => handleAnswer(index, isHost ? gameState.triquiWinnerId : playerId)}
+            answer={gameState.questionAnswer ?? null}
+            revealed={gameState.questionRevealed ?? false}
+            onAnswer={(index) => handleAnswer(index, isHost ? (gameState.triquiWinnerId ?? null) : playerId)}
           />
 
           {isHost ? (
@@ -319,20 +388,32 @@ export function GameView({ roomId }: { roomId: string }) {
                       newScore[gameState.triquiWinnerId] = (newScore[gameState.triquiWinnerId] || 0) + 100
                     }
 
-                    updateGameState({
-                      phase: 'TRIQUI',
-                      board: Array(9).fill(null),
-                      turn: gameState.playerO, // Alternar inicio de ronda
-                      score: newScore,
-                      currentQuestionIndex: gameState.currentQuestionIndex + 1,
-                      triquiWinnerId: null,
-                      questionAnswer: null,
-                      questionRevealed: false,
-                    })
+                    const nextIndex = (gameState.currentQuestionIndex ?? 0) + 1
+                    const hasMoreQuestions = nextIndex < questions.length
+
+                    if (hasMoreQuestions) {
+                      updateGameState({
+                        phase: 'TRIQUI',
+                        board: Array(9).fill(null),
+                        turn: gameState.playerO, // Alternar inicio de ronda
+                        score: newScore,
+                        currentQuestionIndex: nextIndex,
+                        triquiWinnerId: null,
+                        questionAnswer: null,
+                        questionRevealed: false,
+                      })
+                    } else {
+                      updateGameState({
+                        phase: 'RESULTS',
+                        score: newScore,
+                      })
+                    }
                   }}
-                  className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
+                  className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white shadow-sm"
                 >
-                  Siguiente Ronda de Triqui
+                  {((gameState.currentQuestionIndex ?? 0) + 1 < questions.length)
+                    ? 'Siguiente Ronda de Triqui'
+                    : 'Finalizar y ver Resultados'}
                 </button>
               )}
             </div>
@@ -470,15 +551,15 @@ export function GameView({ roomId }: { roomId: string }) {
           onMove={(index) => handleMove(index, isHost ? gameState.turn : playerId)}
           disabled={(!isHost && playerId !== gameState.turn) || !!winResult.winner || winResult.isDraw}
           winnerLine={winResult.line}
-          player1Id={gameState.playerX}
-          player2Id={gameState.playerO}
+          player1Id={gameState.playerX ?? null}
+          player2Id={gameState.playerO ?? null}
         />
 
         {isHost && (winResult.winner || winResult.isDraw) ? (
           <div className="flex flex-col gap-3">
             {winResult.winner && currentQuestion ? (
               <button
-                className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
+                className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white shadow-sm"
                 onClick={() => {
                   updateGameState({
                     phase: 'QUESTION',
@@ -493,17 +574,23 @@ export function GameView({ roomId }: { roomId: string }) {
             <button
               className={`w-full rounded-xl px-4 py-3 font-medium shadow-sm ${
                 winResult.winner && currentQuestion
-                  ? 'bg-zinc-200 text-zinc-800' // Botón secundario si hay pregunta
-                  : 'bg-zinc-950 text-white' // Botón primario si fue empate o no hay más preguntas
+                  ? 'bg-stone-200 text-stone-800' // Botón secundario si hay pregunta
+                  : 'bg-slate-900 text-white' // Botón primario si fue empate o no hay más preguntas
               }`}
               onClick={() => {
-                updateGameState({
-                  board: Array(9).fill(null),
-                  turn: gameState.playerO, // Cambiar quién empieza
-                })
+                if (!currentQuestion) {
+                  updateGameState({ phase: 'RESULTS' })
+                } else {
+                  updateGameState({
+                    board: Array(9).fill(null),
+                    turn: gameState.playerO, // Cambiar quién empieza
+                  })
+                }
               }}
             >
-              {winResult.winner && currentQuestion
+              {!currentQuestion
+                ? 'Ver Resultados'
+                : winResult.winner
                 ? 'Omitir y Siguiente Ronda'
                 : 'Siguiente Ronda de Triqui'}
             </button>
