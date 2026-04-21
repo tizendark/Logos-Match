@@ -52,34 +52,34 @@ export default function HostTemplatesPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-10 text-zinc-950">
-      <main className="w-full max-w-md">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight">
+    <div className="flex flex-1 flex-col items-center bg-stone-50 px-4 py-10 text-slate-900">
+      <main className="w-full max-w-md space-y-6">
+        <div className="rounded-2xl bg-white p-8 shadow-xl border border-stone-100">
+          <h1 className="text-3xl font-bold tracking-tight text-blue-950">
             Elegir plantilla
           </h1>
-          <p className="mt-2 text-sm text-zinc-600">
+          <p className="mt-2 text-base text-stone-600">
             Selecciona un set predefinido y crea la sala en segundos.
           </p>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="space-y-4">
           {templates.map((t) => (
             <div
               key={t.id}
-              className="rounded-2xl bg-white p-5 shadow-sm"
+              className="rounded-2xl bg-white p-6 shadow-md border border-stone-100 hover:shadow-lg transition-shadow"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-sm font-semibold">{t.title}</h2>
-                  <p className="mt-1 text-xs text-zinc-600">
+                  <h2 className="text-lg font-bold text-slate-800">{t.title}</h2>
+                  <p className="mt-1 text-sm font-medium text-amber-600">
                     {t.category ?? 'Sin categoría'}
                     {t.difficulty ? ` • ${t.difficulty}` : ''}
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="shrink-0 rounded-xl bg-zinc-950 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                  className="shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-amber-950 hover:bg-amber-600 transition-all shadow-sm disabled:opacity-60"
                   onClick={() => createRoomFromTemplate(t.id)}
                   disabled={isPending || !hostToken}
                 >
@@ -87,18 +87,18 @@ export default function HostTemplatesPage() {
                 </button>
               </div>
               {t.description ? (
-                <p className="mt-3 text-sm text-zinc-700">{t.description}</p>
+                <p className="mt-4 text-sm text-stone-600 leading-relaxed">{t.description}</p>
               ) : null}
             </div>
           ))}
           {templates.length === 0 ? (
-            <div className="rounded-2xl bg-white p-5 text-sm text-zinc-600 shadow-sm">
+            <div className="rounded-2xl bg-white p-8 text-center text-stone-500 italic shadow-sm border border-stone-100">
               No hay plantillas disponibles todavía.
             </div>
           ) : null}
         </div>
 
-        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-medium text-red-600">{error}</p> : null}
       </main>
     </div>
   )

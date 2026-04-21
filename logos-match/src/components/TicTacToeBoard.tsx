@@ -29,7 +29,7 @@ export function TicTacToeBoard({
           const isPlayer2 = cell === player2Id && player2Id !== null
           
           let Icon = null
-          let iconColorClass = 'text-zinc-400'
+          let iconColorClass = 'text-stone-400'
           if (isPlayer1) {
             Icon = X
             iconColorClass = 'text-blue-500'
@@ -38,7 +38,7 @@ export function TicTacToeBoard({
             iconColorClass = 'text-rose-500'
           } else if (cell) {
             Icon = X // Fallback para un jugador desconocido
-            iconColorClass = 'text-zinc-600'
+            iconColorClass = 'text-stone-600'
           }
 
           return (
@@ -48,7 +48,7 @@ export function TicTacToeBoard({
               whileTap={!cell && !disabled ? { scale: 0.92 } : undefined}
               className={`
                 flex items-center justify-center rounded-2xl border-2 text-4xl shadow-sm transition-colors sm:text-6xl
-                ${cell ? 'border-zinc-200 bg-white' : 'border-zinc-100 bg-zinc-50 hover:bg-zinc-100'}
+                ${cell ? 'border-stone-200 bg-white' : 'border-stone-100 bg-stone-50 hover:bg-stone-100'}
                 ${isWinnerCell ? 'border-green-300 bg-green-50 ring-4 ring-green-500/20' : ''}
                 ${disabled && !cell ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
               `}
