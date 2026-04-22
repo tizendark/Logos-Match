@@ -37,7 +37,14 @@ export function QuestionView({
         </p>
       </div>
 
-      <div className="grid gap-3">
+      <motion.div 
+        className="grid gap-3"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          visible: { transition: { staggerChildren: 0.1 } },
+        }}
+      >
         {question.options.map((opt, idx) => {
           const isSelected = answer === idx
           const isCorrect = revealed && idx === question.correct_index
@@ -58,8 +65,12 @@ export function QuestionView({
           return (
             <motion.button
               key={idx}
+              variants={{
+                hidden: { opacity: 0, y: 20 },
+                visible: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0.4 } },
+              }}
               type="button"
-              whileTap={canAnswer || (isHost && !revealed) ? { scale: 0.98 } : undefined}
+              whileTap={canAnswer || (isHost && !revealed) ? { scale: 0.92 } : undefined}
               disabled={(!canAnswer && !isHost) || revealed}
               onClick={() => {
                 if (canAnswer || (isHost && !revealed)) {
@@ -79,7 +90,7 @@ export function QuestionView({
             </motion.button>
           )
         })}
-      </div>
+      </motion.div>
 
       {revealed && question.explanation ? (
         <motion.div

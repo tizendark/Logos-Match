@@ -14,6 +14,8 @@ import { ScoreBoard } from '@/components/ScoreBoard'
 import { ResultsView } from '@/components/ResultsView'
 import { LogOut, Volume2, VolumeX } from 'lucide-react'
 import { useGameSounds } from '@/hooks/useGameSounds'
+import { triggerConfetti } from '@/utils/confetti'
+import { GameStageTransition } from '@/components/GameStageTransition'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -95,6 +97,7 @@ export function GameView({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (gameState.phase === 'RESULTS' && prevPhase !== 'RESULTS') {
       playWin()
+      triggerConfetti()
     }
     setPrevPhase(gameState.phase)
   }, [gameState.phase, prevPhase, playWin])
@@ -182,6 +185,15 @@ export function GameView({ roomId }: { roomId: string }) {
   }, [gameState, isHost, hostToken, roomId, room])
 
   const winResult = checkWinner(gameState.board)
+
+  // Trigger confetti when someone wins a round
+  const [prevWinner, setPrevWinner] = useState<string | null>(null)
+  useEffect(() => {
+    if (winResult.winner && prevWinner !== winResult.winner) {
+      triggerConfetti()
+    }
+    setPrevWinner(winResult.winner)
+  }, [winResult.winner, prevWinner])
 
   // Función de movimiento. 
   // Los jugadores envían `PLAYER_MOVE` vía sendPlayerAction.
@@ -329,17 +341,18 @@ export function GameView({ roomId }: { roomId: string }) {
     }
   }
 
+  let content = null
+  const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
+
   if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center bg-stone-50">
+    content = (
+      <div key="loading" className="flex flex-1 items-center justify-center bg-stone-50 h-full w-full">
         <p className="text-stone-500">Cargando partida...</p>
       </div>
     )
-  }
-
-  if (gameState.phase === 'RESULTS') {
-    return (
-      <div className="flex flex-1 flex-col items-center bg-stone-50 px-4 py-8 text-slate-900 overflow-y-auto">
+  } else if (gameState.phase === 'RESULTS') {
+    content = (
+      <div key="results" className="flex flex-1 flex-col items-center bg-stone-50 px-4 py-8 text-slate-900 overflow-y-auto h-full w-full">
         <ResultsView players={players} score={gameState.score} />
         {isHost ? (
           <div className="mt-8 w-full max-w-md px-4 pb-8">
@@ -358,16 +371,12 @@ export function GameView({ roomId }: { roomId: string }) {
         )}
       </div>
     )
-  }
-
-  const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
-
-  if (gameState.phase === 'QUESTION' && currentQuestion) {
+  } else if (gameState.phase === 'QUESTION' && currentQuestion) {
     const triquiWinnerName =
       players.find((p) => p.id === gameState.triquiWinnerId)?.name || 'Jugador'
 
-    return (
-      <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950">
+    content = (
+      <div key="question" className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950 h-full w-full">
         <main className="flex w-full max-w-md flex-col gap-6">
           <div className="flex items-center justify-between">
             <ScoreBoard players={players} score={gameState.score} />
@@ -460,144 +469,143 @@ export function GameView({ roomId }: { roomId: string }) {
         </main>
       </div>
     )
-  }
+  } else {
+    const playerXName =
+      players.find((p) => p.id === gameState.playerX)?.name || 'Jugador X'
+    const playerOName =
+      players.find((p) => p.id === gameState.playerO)?.name || 'Jugador O'
 
-  const playerXName =
-    players.find((p) => p.id === gameState.playerX)?.name || 'Jugador X'
-  const playerOName =
-    players.find((p) => p.id === gameState.playerO)?.name || 'Jugador O'
+    const isPlayerXTurn = gameState.turn === gameState.playerX
+    const isPlayerOTurn = gameState.turn === gameState.playerO
 
-  const isPlayerXTurn = gameState.turn === gameState.playerX
-  const isPlayerOTurn = gameState.turn === gameState.playerO
-
-  return (
-    <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950 relative">
-      {/* Modal de inicio de ronda */}
-      {showTurnModal ? (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-xl">
-            <h2 className="text-xl font-bold tracking-tight text-zinc-900">
-              ¡Nueva Ronda!
-            </h2>
-            <p className="mt-3 text-zinc-600">
-              Es el turno de empezar para:
-            </p>
-            <p className="mt-2 text-3xl font-black text-blue-600">
-              {isPlayerXTurn ? playerXName : isPlayerOTurn ? playerOName : '—'}
-            </p>
-            <button
-              onClick={() => {
-                playClick()
-                setShowTurnModal(false)
-              }}
-              className="mt-8 w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
-            >
-              ¡Entendido!
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <main className="flex w-full max-w-md flex-col gap-8">
-        <div className="flex items-center justify-between">
-          <ScoreBoard players={players} score={gameState.score} />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleMute}
-              className="ml-2 flex shrink-0 items-center justify-center rounded-xl bg-stone-100 p-3 text-stone-600 hover:bg-stone-200 transition-colors"
-              title={isMuted ? 'Activar sonido' : 'Silenciar'}
-            >
-              {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-            </button>
-            {isHost ? (
-              <button
-                onClick={handleCloseGame}
-                disabled={closing}
-                className="flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
-                title="Cerrar partida sin ganadores"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="text-center">
-          <h1 className="text-xl font-bold tracking-tight">Triqui</h1>
-          {winResult.winner ? (
-            <p className="mt-2 text-lg font-medium text-green-600">
-              ¡Ganó {winResult.winner === gameState.playerX ? playerXName : playerOName}!
-            </p>
-          ) : winResult.isDraw ? (
-            <p className="mt-2 text-lg font-medium text-zinc-600">
-              ¡Empate!
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-zinc-600">
-              Turno de:{' '}
-              <span className="font-semibold text-zinc-900">
+    content = (
+      <div key="triqui" className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950 relative h-full w-full">
+        {/* Modal de inicio de ronda */}
+        {showTurnModal ? (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-xl">
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900">
+                ¡Nueva Ronda!
+              </h2>
+              <p className="mt-3 text-zinc-600">
+                Es el turno de empezar para:
+              </p>
+              <p className="mt-2 text-3xl font-black text-blue-600">
                 {isPlayerXTurn ? playerXName : isPlayerOTurn ? playerOName : '—'}
-              </span>
-            </p>
-          )}
-        </div>
+              </p>
+              <button
+                onClick={() => {
+                  playClick()
+                  setShowTurnModal(false)
+                }}
+                className="mt-8 w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
+              >
+                ¡Entendido!
+              </button>
+            </div>
+          </div>
+        ) : null}
 
-      <div className="mx-auto mb-6 flex w-full max-w-[320px] sm:max-w-sm items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-stone-100">
-          <div
-            className={`absolute bottom-0 left-0 h-1 w-1/2 bg-blue-500 transition-all duration-300 ${
-              isPlayerXTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-          <div
-            className={`absolute bottom-0 right-0 h-1 w-1/2 bg-rose-500 transition-all duration-300 ${
-              isPlayerOTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
+        <main className="flex w-full max-w-md flex-col gap-8">
+          <div className="flex items-center justify-between">
+            <ScoreBoard players={players} score={gameState.score} />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleMute}
+                className="ml-2 flex shrink-0 items-center justify-center rounded-xl bg-stone-100 p-3 text-stone-600 hover:bg-stone-200 transition-colors"
+                title={isMuted ? 'Activar sonido' : 'Silenciar'}
+              >
+                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+              </button>
+              {isHost ? (
+                <button
+                  onClick={handleCloseGame}
+                  disabled={closing}
+                  className="flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  title="Cerrar partida sin ganadores"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              ) : null}
+            </div>
+          </div>
 
-          <div
-            className={`flex flex-col items-center transition-all duration-300 ${
-              isPlayerXTurn && !winResult.winner
-                ? 'scale-110 opacity-100 drop-shadow-md'
-                : 'scale-90 opacity-40'
-            }`}
-          >
-            <div className="text-xl font-black text-blue-500">X</div>
-            <span
-              className={`text-xs ${
+          <div className="text-center">
+            <h1 className="text-xl font-bold tracking-tight">Triqui</h1>
+            {winResult.winner ? (
+              <p className="mt-2 text-lg font-medium text-green-600">
+                ¡Ganó {winResult.winner === gameState.playerX ? playerXName : playerOName}!
+              </p>
+            ) : winResult.isDraw ? (
+              <p className="mt-2 text-lg font-medium text-zinc-600">
+                ¡Empate!
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-600">
+                Turno de:{' '}
+                <span className="font-semibold text-zinc-900">
+                  {isPlayerXTurn ? playerXName : isPlayerOTurn ? playerOName : '—'}
+                </span>
+              </p>
+            )}
+          </div>
+
+          <div className="mx-auto mb-6 flex w-full max-w-[320px] sm:max-w-sm items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-stone-100">
+            <div
+              className={`absolute bottom-0 left-0 h-1 w-1/2 bg-blue-500 transition-all duration-300 ${
+                isPlayerXTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+            <div
+              className={`absolute bottom-0 right-0 h-1 w-1/2 bg-rose-500 transition-all duration-300 ${
+                isPlayerOTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+
+            <div
+              className={`flex flex-col items-center transition-all duration-300 ${
                 isPlayerXTurn && !winResult.winner
-                  ? 'font-bold text-blue-600'
-                  : 'font-medium text-zinc-500'
+                  ? 'scale-110 opacity-100 drop-shadow-md'
+                  : 'scale-90 opacity-40'
               }`}
             >
-              {playerXName}
-            </span>
-          </div>
+              <div className="text-xl font-black text-blue-500">X</div>
+              <span
+                className={`text-xs ${
+                  isPlayerXTurn && !winResult.winner
+                    ? 'font-bold text-blue-600'
+                    : 'font-medium text-zinc-500'
+                }`}
+              >
+                {playerXName}
+              </span>
+            </div>
 
-          <div className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-400">
-            VS
-          </div>
+            <div className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-400">
+              VS
+            </div>
 
-          <div
-            className={`flex flex-col items-center transition-all duration-300 ${
-              isPlayerOTurn && !winResult.winner
-                ? 'scale-110 opacity-100 drop-shadow-md'
-                : 'scale-90 opacity-40'
-            }`}
-          >
-            <div className="text-xl font-black text-rose-500">O</div>
-            <span
-              className={`text-xs ${
+            <div
+              className={`flex flex-col items-center transition-all duration-300 ${
                 isPlayerOTurn && !winResult.winner
-                  ? 'font-bold text-rose-600'
-                  : 'font-medium text-zinc-500'
+                  ? 'scale-110 opacity-100 drop-shadow-md'
+                  : 'scale-90 opacity-40'
               }`}
             >
-              {playerOName}
-            </span>
+              <div className="text-xl font-black text-rose-500">O</div>
+              <span
+                className={`text-xs ${
+                  isPlayerOTurn && !winResult.winner
+                    ? 'font-bold text-rose-600'
+                    : 'font-medium text-zinc-500'
+                }`}
+              >
+                {playerOName}
+              </span>
+            </div>
           </div>
-        </div>
 
-        <TicTacToeBoard
+          <TicTacToeBoard
             board={gameState.board}
             onMove={(index) => handleMove(index, isHost ? gameState.turn : playerId)}
             disabled={(!isHost && playerId !== gameState.turn) || !!winResult.winner || winResult.isDraw}
@@ -607,50 +615,59 @@ export function GameView({ roomId }: { roomId: string }) {
             playPlace={playPlace}
           />
 
-        {isHost && (winResult.winner || winResult.isDraw) ? (
-          <div className="flex flex-col gap-3">
-            {winResult.winner && currentQuestion ? (
+          {isHost && (winResult.winner || winResult.isDraw) ? (
+            <div className="flex flex-col gap-3">
+              {winResult.winner && currentQuestion ? (
+                <button
+                  className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white shadow-sm"
+                  onClick={() => {
+                    playClick()
+                    updateGameState({
+                      phase: 'QUESTION',
+                      triquiWinnerId: winResult.winner,
+                    })
+                  }}
+                >
+                  Ir a Pregunta para el Ganador
+                </button>
+              ) : null}
+
               <button
-                className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white shadow-sm"
+                className={`w-full rounded-xl px-4 py-3 font-medium shadow-sm ${
+                  winResult.winner && currentQuestion
+                    ? 'bg-stone-200 text-stone-800' // Botón secundario si hay pregunta
+                    : 'bg-slate-900 text-white' // Botón primario si fue empate o no hay más preguntas
+                }`}
                 onClick={() => {
                   playClick()
-                  updateGameState({
-                    phase: 'QUESTION',
-                    triquiWinnerId: winResult.winner,
-                  })
+                  if (!currentQuestion) {
+                    updateGameState({ phase: 'RESULTS' })
+                  } else {
+                    updateGameState({
+                      board: Array(9).fill(null),
+                      turn: gameState.playerO, // Cambiar quién empieza
+                    })
+                  }
                 }}
               >
-                Ir a Pregunta para el Ganador
+                {!currentQuestion
+                  ? 'Ver Resultados'
+                  : winResult.winner
+                  ? 'Omitir y Siguiente Ronda'
+                  : 'Siguiente Ronda de Triqui'}
               </button>
-            ) : null}
+            </div>
+          ) : null}
+        </main>
+      </div>
+    )
+  }
 
-            <button
-              className={`w-full rounded-xl px-4 py-3 font-medium shadow-sm ${
-                winResult.winner && currentQuestion
-                  ? 'bg-stone-200 text-stone-800' // Botón secundario si hay pregunta
-                  : 'bg-slate-900 text-white' // Botón primario si fue empate o no hay más preguntas
-              }`}
-              onClick={() => {
-                playClick()
-                if (!currentQuestion) {
-                  updateGameState({ phase: 'RESULTS' })
-                } else {
-                  updateGameState({
-                    board: Array(9).fill(null),
-                    turn: gameState.playerO, // Cambiar quién empieza
-                  })
-                }
-              }}
-            >
-              {!currentQuestion
-                ? 'Ver Resultados'
-                : winResult.winner
-                ? 'Omitir y Siguiente Ronda'
-                : 'Siguiente Ronda de Triqui'}
-            </button>
-          </div>
-        ) : null}
-      </main>
+  return (
+    <div className="flex flex-1 w-full h-full relative overflow-hidden">
+      <GameStageTransition stageKey={loading ? 'loading' : gameState.phase}>
+        {content}
+      </GameStageTransition>
     </div>
   )
 }

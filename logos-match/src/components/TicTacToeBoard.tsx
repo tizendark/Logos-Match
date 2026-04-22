@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { X, Circle } from 'lucide-react'
+import { useState } from 'react'
 
 export type TicTacToeBoardProps = {
   board: (string | null)[]
@@ -22,6 +23,8 @@ export function TicTacToeBoard({
   player2Id,
   playPlace,
 }: TicTacToeBoardProps) {
+  const [shakeIndex, setShakeIndex] = useState<number | null>(null)
+
   return (
     <div className="mx-auto flex w-full max-w-[320px] sm:max-w-sm flex-col items-center justify-center">
       <div className="grid aspect-square w-full grid-cols-3 grid-rows-3 gap-2 sm:gap-3">
@@ -48,6 +51,8 @@ export function TicTacToeBoard({
               key={i}
               type="button"
               whileTap={!cell && !disabled ? { scale: 0.92 } : undefined}
+              animate={shakeIndex === i ? { x: [-10, 10, -10, 10, 0] } : {}}
+              transition={{ duration: 0.4 }}
               className={`
                 flex items-center justify-center rounded-2xl border-2 text-4xl shadow-sm transition-colors sm:text-6xl
                 ${cell ? 'border-stone-200 bg-white' : 'border-stone-100 bg-stone-50 hover:bg-stone-100'}
@@ -58,16 +63,19 @@ export function TicTacToeBoard({
                 if (!cell && !disabled) {
                   playPlace?.()
                   onMove(i)
+                } else if (cell && !disabled) {
+                  setShakeIndex(i)
+                  setTimeout(() => setShakeIndex(null), 400)
                 }
               }}
-              disabled={!!cell || disabled}
+              disabled={disabled}
               aria-label={`Casilla ${i + 1}`}
             >
               {Icon ? (
                 <motion.div
-                  initial={{ scale: 0, rotate: -45, opacity: 0 }}
+                  initial={{ scale: 0, rotate: -20, opacity: 0 }}
                   animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                  transition={{ type: 'spring', bounce: 0.5, duration: 0.5 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 15 }}
                 >
                   <Icon
                     className={`h-12 w-12 sm:h-16 sm:w-16 ${iconColorClass} ${isWinnerCell ? 'drop-shadow-sm' : ''}`}

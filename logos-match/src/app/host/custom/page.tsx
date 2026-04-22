@@ -210,11 +210,15 @@ export default function HostCustomQuizPage() {
           <div className="mt-6 flex gap-3">
             <button
               type="button"
-              className="flex-1 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-amber-950 hover:bg-amber-600 transition-all shadow-sm disabled:opacity-60"
+              className="flex-1 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-amber-950 hover:bg-amber-600 transition-all shadow-sm disabled:opacity-60 flex justify-center items-center"
               onClick={generateWithAi}
               disabled={isPending}
             >
-              Generar con IA
+              {isPending ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-950 border-t-transparent" />
+              ) : (
+                'Generar con IA'
+              )}
             </button>
             <button
               type="button"
@@ -227,113 +231,120 @@ export default function HostCustomQuizPage() {
           </div>
         </div>
 
-        {questions.map((q, qIndex) => {
-          const normalizedOptions = q.options.map((o) => o.trim()).filter(Boolean)
-          const maxCorrectIndex = Math.max(0, normalizedOptions.length - 1)
-          const correctIndex = Math.min(q.correctIndex, maxCorrectIndex)
+        {isPending ? (
+          <div className="flex flex-col gap-4 py-8 items-center justify-center opacity-80">
+            <div className="h-12 w-12 rounded-full border-4 border-amber-500 border-t-blue-600 animate-spin mb-4"></div>
+            <p className="text-lg font-medium text-blue-950 animate-pulse">Generando preguntas...</p>
+            <div className="w-full space-y-4">
+              <div className="h-32 w-full bg-stone-200 rounded-2xl animate-pulse"></div>
+              <div className="h-32 w-full bg-stone-200 rounded-2xl animate-pulse"></div>
+            </div>
+          </div>
+        ) : (
+          questions.map((q, qIndex) => {
+            const normalizedOptions = q.options.map((o) => o.trim()).filter(Boolean)
+            const maxCorrectIndex = Math.max(0, normalizedOptions.length - 1)
+            const correctIndex = Math.min(q.correctIndex, maxCorrectIndex)
 
-          return (
-            <div key={qIndex} className="rounded-2xl bg-white p-6 shadow-md border border-stone-100">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-lg font-bold text-blue-950">Pregunta {qIndex + 1}</p>
-                <button
-                  type="button"
-                  className="rounded-lg px-3 py-1 text-sm font-medium text-stone-600 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-60"
-                  onClick={() => removeQuestion(qIndex)}
-                  disabled={isPending || questions.length === 1}
-                >
-                  Quitar
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-2">
-                <label className="text-sm font-semibold text-slate-800">
-                  Enunciado
-                </label>
-                <textarea
-                  className="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
-                  rows={3}
-                  value={q.prompt}
-                  onChange={(e) => updateQuestion(qIndex, { prompt: e.target.value })}
-                  disabled={isPending}
-                />
-              </div>
-
-              <div className="mt-6 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-slate-800">
-                    Opciones (2–6)
-                  </label>
+            return (
+              <div key={qIndex} className="rounded-2xl bg-white p-6 shadow-md border border-stone-100">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-lg font-bold text-blue-950">Pregunta {qIndex + 1}</p>
                   <button
                     type="button"
-                    className="rounded-lg px-3 py-1 text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-60"
-                    onClick={() => addOption(qIndex)}
-                    disabled={isPending || normalizedOptions.length >= 6}
+                    className="rounded-lg px-3 py-1 text-sm font-medium text-stone-600 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-60"
+                    onClick={() => removeQuestion(qIndex)}
+                    disabled={isPending || questions.length === 1}
                   >
-                    + Opción
+                    Quitar
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {q.options.map((opt, optIndex) => (
-                    <div key={optIndex} className="flex gap-2">
-                      <input
-                        className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
-                        value={opt}
-                        onChange={(e) => updateOption(qIndex, optIndex, e.target.value)}
-                        disabled={isPending}
-                        placeholder={`Opción ${optIndex + 1}`}
-                      />
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-xl bg-white border border-stone-200 px-4 py-3 text-base font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all shadow-sm disabled:opacity-60"
-                        onClick={() => removeOption(qIndex, optIndex)}
-                        disabled={isPending || q.options.length <= 2}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
+                <div className="mt-4 space-y-2">
+                  <label className="text-sm font-semibold text-slate-800">
+                    Enunciado
+                  </label>
+                  <textarea
+                    className="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
+                    rows={3}
+                    value={q.prompt}
+                    onChange={(e) => updateQuestion(qIndex, { prompt: e.target.value })}
+                    disabled={isPending}
+                  />
+                </div>
+
+                <div className="mt-6 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-slate-800">
+                      Opciones (2–6)
+                    </label>
+                    <button
+                      type="button"
+                      className="rounded-lg px-3 py-1 text-sm font-medium text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-60"
+                      onClick={() => addOption(qIndex)}
+                      disabled={isPending || normalizedOptions.length >= 6}
+                    >
+                      + Opción
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {q.options.map((opt, optIndex) => (
+                      <div key={optIndex} className="flex gap-2">
+                        <input
+                          className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
+                          value={opt}
+                          onChange={(e) => updateOption(qIndex, optIndex, e.target.value)}
+                          disabled={isPending}
+                          placeholder={`Opción ${optIndex + 1}`}
+                        />
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-xl bg-white border border-stone-200 px-4 py-3 text-base font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all shadow-sm disabled:opacity-60"
+                          onClick={() => removeOption(qIndex, optIndex)}
+                          disabled={isPending || q.options.length <= 2}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-2">
+                  <label className="text-sm font-semibold text-slate-800">
+                    Respuesta correcta
+                  </label>
+                  <select
+                    className="w-full rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
+                    value={correctIndex}
+                    onChange={(e) => updateQuestion(qIndex, { correctIndex: Number(e.target.value) })}
+                    disabled={isPending}
+                  >
+                    {normalizedOptions.map((opt, i) => (
+                      <option key={i} value={i}>
+                        {opt || `Opción ${i + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mt-6 space-y-2">
+                  <label className="text-sm font-semibold text-slate-800">
+                    Explicación (opcional)
+                  </label>
+                  <textarea
+                    className="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
+                    rows={2}
+                    value={q.explanation}
+                    onChange={(e) => updateQuestion(qIndex, { explanation: e.target.value })}
+                    disabled={isPending}
+                  />
                 </div>
               </div>
-
-              <div className="mt-6 space-y-2">
-                <label className="text-sm font-semibold text-slate-800">
-                  Respuesta Correcta
-                </label>
-                <select
-                  className="w-full rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm bg-white"
-                  value={correctIndex}
-                  onChange={(e) =>
-                    updateQuestion(qIndex, { correctIndex: Number(e.target.value) })
-                  }
-                  disabled={isPending || normalizedOptions.length < 2}
-                >
-                  {normalizedOptions.map((opt, i) => (
-                    <option key={i} value={i}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mt-6 space-y-2">
-                <label className="text-sm font-semibold text-slate-800">
-                  Explicación (opcional)
-                </label>
-                <textarea
-                  className="w-full resize-none rounded-xl border border-stone-200 px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
-                  rows={2}
-                  value={q.explanation ?? ''}
-                  onChange={(e) =>
-                    updateQuestion(qIndex, { explanation: e.target.value })
-                  }
-                  disabled={isPending}
-                />
-              </div>
-            </div>
-          )
-        })}
+            )
+          })
+        )}
 
         <div className="rounded-2xl bg-white p-8 shadow-xl border border-stone-100">
           <button
