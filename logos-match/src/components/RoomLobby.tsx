@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { Room, RoomPlayer } from '@/lib/models/quiz'
 import { useHostToken } from '@/hooks/useHostToken'
 import { usePlayerPresence } from '@/hooks/usePlayerPresence'
+import { useGameSounds } from '@/hooks/useGameSounds'
 
 type LobbyData = {
   room: Room | null
@@ -24,9 +25,19 @@ export function RoomLobby({ roomId }: { roomId: string }) {
   const [deleting, setDeleting] = useState(false)
 
   const isHost = Boolean(hostToken && data.room?.host_token === hostToken)
+  const { playJoin, playClick } = useGameSounds()
   
   // Iniciar latidos para el jugador si no es Host
   usePlayerPresence(!isHost ? playerId : null)
+
+  // Detectar nuevos jugadores
+  const [prevPlayerCount, setPrevPlayerCount] = useState(0)
+  useEffect(() => {
+    if (data.players.length > prevPlayerCount) {
+      playJoin()
+    }
+    setPrevPlayerCount(data.players.length)
+  }, [data.players.length, prevPlayerCount, playJoin])
 
   useEffect(() => {
     let cancelled = false
@@ -186,14 +197,20 @@ export function RoomLobby({ roomId }: { roomId: string }) {
         {isHost && status === 'lobby' ? (
           <div className="flex flex-col gap-3">
             <button
-              onClick={handleStartGame}
+              onClick={() => {
+                playClick()
+                handleStartGame()
+              }}
               disabled={starting || deleting || data.players.length < 2}
               className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
             >
               {starting ? 'Iniciando...' : 'Iniciar partida'}
             </button>
             <button
-              onClick={handleDeleteRoom}
+              onClick={() => {
+                playClick()
+                handleDeleteRoom()
+              }}
               disabled={starting || deleting}
               className="w-full rounded-xl bg-red-50 px-4 py-3 font-medium text-red-600 shadow-sm hover:bg-red-100 disabled:opacity-50"
             >

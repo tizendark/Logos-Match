@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useHostToken } from '@/hooks/useHostToken'
+import { useGameSounds } from '@/hooks/useGameSounds'
 import type { QuizDraftQuestion } from '@/lib/models/quiz'
 
 type DraftQuestionState = {
@@ -25,6 +26,7 @@ function newQuestion(): DraftQuestionState {
 export default function HostCustomQuizPage() {
   const router = useRouter()
   const hostToken = useHostToken()
+  const { playClick } = useGameSounds()
   const [isPending, startTransition] = useTransition()
 
   const [title, setTitle] = useState('Quiz personalizado')
@@ -62,14 +64,17 @@ export default function HostCustomQuizPage() {
   }
 
   function addQuestion() {
+    playClick()
     setQuestions((prev) => [...prev, newQuestion()])
   }
 
   function removeQuestion(index: number) {
+    playClick()
     setQuestions((prev) => prev.filter((_, i) => i !== index))
   }
 
   function addOption(qIndex: number) {
+    playClick()
     setQuestions((prev) =>
       prev.map((q, i) => {
         if (i !== qIndex) return q
@@ -81,6 +86,7 @@ export default function HostCustomQuizPage() {
   }
 
   function removeOption(qIndex: number, optIndex: number) {
+    playClick()
     setQuestions((prev) =>
       prev.map((q, i) => {
         if (i !== qIndex) return q
@@ -104,7 +110,8 @@ export default function HostCustomQuizPage() {
   }
 
   function createRoom() {
-    if (!hostToken) return
+    if (!canCreate || !hostToken) return
+    playClick()
     setError(null)
     startTransition(async () => {
       const payload = {
@@ -134,6 +141,7 @@ export default function HostCustomQuizPage() {
   }
 
   function generateWithAi() {
+    playClick()
     setError(null)
     const topic = window.prompt('Tema para generar preguntas (ej. Libro de Jonás):')
     if (!topic?.trim()) return

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import type { GameQuestion } from '@/lib/models/quiz'
+import { useGameSounds } from '@/hooks/useGameSounds'
 
 export type QuestionViewProps = {
   question: GameQuestion
@@ -23,6 +24,7 @@ export function QuestionView({
   onAnswer,
 }: QuestionViewProps) {
   const canAnswer = playerId === triquiWinnerId && !revealed && answer === null
+  const { playClick } = useGameSounds()
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -61,6 +63,7 @@ export function QuestionView({
               disabled={(!canAnswer && !isHost) || revealed}
               onClick={() => {
                 if (canAnswer || (isHost && !revealed)) {
+                  playClick()
                   onAnswer(idx)
                 }
               }}

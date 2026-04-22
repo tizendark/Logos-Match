@@ -3,10 +3,12 @@
 import { useRouter } from 'next/navigation'
 
 import { useHostToken } from '@/hooks/useHostToken'
+import { useGameSounds } from '@/hooks/useGameSounds'
 
 export default function HostHomePage() {
   const router = useRouter()
   const hostToken = useHostToken()
+  const { playClick } = useGameSounds()
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-stone-50 px-4 py-10 text-slate-900">
@@ -20,7 +22,10 @@ export default function HostHomePage() {
           <button
             type="button"
             className="w-full rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-amber-950 hover:bg-amber-600 transition-all shadow-sm disabled:opacity-60"
-            onClick={() => router.push('/host/templates')}
+            onClick={() => {
+              playClick()
+              router.push('/host/templates')
+            }}
             disabled={!hostToken}
           >
             Usar plantilla
@@ -28,7 +33,10 @@ export default function HostHomePage() {
           <button
             type="button"
             className="w-full rounded-xl bg-white border border-stone-200 px-4 py-3 text-base font-semibold text-slate-800 hover:bg-stone-50 transition-all shadow-sm hover:shadow disabled:opacity-60"
-            onClick={() => router.push('/host/custom')}
+            onClick={() => {
+              playClick()
+              router.push('/host/custom')
+            }}
             disabled={!hostToken}
           >
             Crear personalizado

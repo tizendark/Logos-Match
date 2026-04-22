@@ -12,7 +12,8 @@ import type { GameQuestion, Room, RoomPlayer } from '@/lib/models/quiz'
 import { QuestionView } from '@/components/QuestionView'
 import { ScoreBoard } from '@/components/ScoreBoard'
 import { ResultsView } from '@/components/ResultsView'
-import { LogOut } from 'lucide-react'
+import { LogOut, Volume2, VolumeX } from 'lucide-react'
+import { useGameSounds } from '@/hooks/useGameSounds'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -28,6 +29,7 @@ export function GameView({ roomId }: { roomId: string }) {
   const isHost = Boolean(hostToken)
   const [closing, setClosing] = useState(false)
   const [showTurnModal, setShowTurnModal] = useState(false)
+  const { isMuted, toggleMute, playPlace, playCorrect, playWrong, playWin, playClick } = useGameSounds()
 
   // Iniciar latidos para el jugador si no es Host
   usePlayerPresence(!isHost ? playerId : null)
@@ -86,6 +88,29 @@ export function GameView({ roomId }: { roomId: string }) {
       window.removeEventListener('beforeunload', handleUnload)
     }
   }, [isHost, hostToken, roomId])
+  // Efecto para sonidos de victoria y resultados de trivia
+  const [prevPhase, setPrevPhase] = useState(gameState.phase)
+  const [prevRevealed, setPrevRevealed] = useState(gameState.questionRevealed)
+  
+  useEffect(() => {
+    if (gameState.phase === 'RESULTS' && prevPhase !== 'RESULTS') {
+      playWin()
+    }
+    setPrevPhase(gameState.phase)
+  }, [gameState.phase, prevPhase, playWin])
+
+  useEffect(() => {
+    if (gameState.questionRevealed && !prevRevealed) {
+      const currentQ = questions[gameState.currentQuestionIndex ?? 0]
+      if (currentQ && gameState.questionAnswer === currentQ.correct_index) {
+        playCorrect()
+      } else if (currentQ) {
+        playWrong()
+      }
+    }
+    setPrevRevealed(gameState.questionRevealed)
+  }, [gameState.questionRevealed, prevRevealed, gameState.questionAnswer, gameState.currentQuestionIndex, questions, playCorrect, playWrong])
+
   useEffect(() => {
     if (gameState.phase === 'TRIQUI' && gameState.turn) {
       const empty = gameState.board.every((cell) => cell === null)
@@ -284,6 +309,7 @@ export function GameView({ roomId }: { roomId: string }) {
   }
 
   async function handleCloseGame() {
+    playClick()
     if (!isHost || closing) return
     const confirm = window.confirm('¿Seguro que deseas cerrar la sesión y eliminar la sala para todos?')
     if (!confirm) return
@@ -345,16 +371,25 @@ export function GameView({ roomId }: { roomId: string }) {
         <main className="flex w-full max-w-md flex-col gap-6">
           <div className="flex items-center justify-between">
             <ScoreBoard players={players} score={gameState.score} />
-            {isHost ? (
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleCloseGame}
-                disabled={closing}
-                className="ml-4 flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
-                title="Cerrar partida sin ganadores"
+                onClick={toggleMute}
+                className="ml-2 flex shrink-0 items-center justify-center rounded-xl bg-stone-100 p-3 text-stone-600 hover:bg-stone-200 transition-colors"
+                title={isMuted ? 'Activar sonido' : 'Silenciar'}
               >
-                <LogOut className="h-5 w-5" />
+                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
-            ) : null}
+              {isHost ? (
+                <button
+                  onClick={handleCloseGame}
+                  disabled={closing}
+                  className="flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                  title="Cerrar partida sin ganadores"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <QuestionView
@@ -372,7 +407,10 @@ export function GameView({ roomId }: { roomId: string }) {
             <div className="flex flex-col gap-3">
               {!gameState.questionRevealed ? (
                 <button
-                  onClick={() => updateGameState({ questionRevealed: true })}
+                  onClick={() => {
+                    playClick()
+                    updateGameState({ questionRevealed: true })
+                  }}
                   disabled={gameState.questionAnswer === null}
                   className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
                 >
@@ -381,6 +419,7 @@ export function GameView({ roomId }: { roomId: string }) {
               ) : (
                 <button
                   onClick={() => {
+                    playClick()
                     const isCorrect = gameState.questionAnswer === currentQuestion.correct_index
                     const newScore = { ...gameState.score }
                     
@@ -447,7 +486,10 @@ export function GameView({ roomId }: { roomId: string }) {
               {isPlayerXTurn ? playerXName : isPlayerOTurn ? playerOName : '—'}
             </p>
             <button
-              onClick={() => setShowTurnModal(false)}
+              onClick={() => {
+                playClick()
+                setShowTurnModal(false)
+              }}
               className="mt-8 w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm"
             >
               ¡Entendido!
@@ -456,19 +498,28 @@ export function GameView({ roomId }: { roomId: string }) {
         </div>
       ) : null}
 
-      <main className="flex w-full max-w-md flex-col gap-6">
-        <div className="flex items-start justify-between gap-4">
+      <main className="flex w-full max-w-md flex-col gap-8">
+        <div className="flex items-center justify-between">
           <ScoreBoard players={players} score={gameState.score} />
-          {isHost ? (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleCloseGame}
-              disabled={closing}
-              className="flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
-              title="Cerrar partida sin ganadores"
+              onClick={toggleMute}
+              className="ml-2 flex shrink-0 items-center justify-center rounded-xl bg-stone-100 p-3 text-stone-600 hover:bg-stone-200 transition-colors"
+              title={isMuted ? 'Activar sonido' : 'Silenciar'}
             >
-              <LogOut className="h-5 w-5" />
+              {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
             </button>
-          ) : null}
+            {isHost ? (
+              <button
+                onClick={handleCloseGame}
+                disabled={closing}
+                className="flex shrink-0 items-center justify-center rounded-xl bg-red-50 p-3 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                title="Cerrar partida sin ganadores"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="text-center">
@@ -491,7 +542,7 @@ export function GameView({ roomId }: { roomId: string }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm relative overflow-hidden">
+      <div className="mx-auto mb-6 flex w-full max-w-[320px] sm:max-w-sm items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-stone-100">
           <div
             className={`absolute bottom-0 left-0 h-1 w-1/2 bg-blue-500 transition-all duration-300 ${
               isPlayerXTurn && !winResult.winner ? 'opacity-100' : 'opacity-0'
@@ -547,13 +598,14 @@ export function GameView({ roomId }: { roomId: string }) {
         </div>
 
         <TicTacToeBoard
-          board={gameState.board}
-          onMove={(index) => handleMove(index, isHost ? gameState.turn : playerId)}
-          disabled={(!isHost && playerId !== gameState.turn) || !!winResult.winner || winResult.isDraw}
-          winnerLine={winResult.line}
-          player1Id={gameState.playerX ?? null}
-          player2Id={gameState.playerO ?? null}
-        />
+            board={gameState.board}
+            onMove={(index) => handleMove(index, isHost ? gameState.turn : playerId)}
+            disabled={(!isHost && playerId !== gameState.turn) || !!winResult.winner || winResult.isDraw}
+            winnerLine={winResult.line}
+            player1Id={gameState.playerX ?? null}
+            player2Id={gameState.playerO ?? null}
+            playPlace={playPlace}
+          />
 
         {isHost && (winResult.winner || winResult.isDraw) ? (
           <div className="flex flex-col gap-3">
@@ -561,6 +613,7 @@ export function GameView({ roomId }: { roomId: string }) {
               <button
                 className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white shadow-sm"
                 onClick={() => {
+                  playClick()
                   updateGameState({
                     phase: 'QUESTION',
                     triquiWinnerId: winResult.winner,
@@ -578,6 +631,7 @@ export function GameView({ roomId }: { roomId: string }) {
                   : 'bg-slate-900 text-white' // Botón primario si fue empate o no hay más preguntas
               }`}
               onClick={() => {
+                playClick()
                 if (!currentQuestion) {
                   updateGameState({ phase: 'RESULTS' })
                 } else {

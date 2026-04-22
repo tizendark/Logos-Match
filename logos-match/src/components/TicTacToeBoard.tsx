@@ -10,6 +10,7 @@ export type TicTacToeBoardProps = {
   winnerLine: number[] | null
   player1Id: string | null
   player2Id: string | null
+  playPlace?: () => void
 }
 
 export function TicTacToeBoard({
@@ -19,6 +20,7 @@ export function TicTacToeBoard({
   winnerLine,
   player1Id,
   player2Id,
+  playPlace,
 }: TicTacToeBoardProps) {
   return (
     <div className="mx-auto flex w-full max-w-[320px] sm:max-w-sm flex-col items-center justify-center">
@@ -53,7 +55,10 @@ export function TicTacToeBoard({
                 ${disabled && !cell ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
               `}
               onClick={() => {
-                if (!cell && !disabled) onMove(i)
+                if (!cell && !disabled) {
+                  playPlace?.()
+                  onMove(i)
+                }
               }}
               disabled={!!cell || disabled}
               aria-label={`Casilla ${i + 1}`}

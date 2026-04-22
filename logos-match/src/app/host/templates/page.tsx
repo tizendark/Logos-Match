@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useHostToken } from '@/hooks/useHostToken'
+import { useGameSounds } from '@/hooks/useGameSounds'
 import type { QuestionTemplate } from '@/lib/models/quiz'
 
 export default function HostTemplatesPage() {
@@ -12,6 +13,8 @@ export default function HostTemplatesPage() {
   const [isPending, startTransition] = useTransition()
   const [templates, setTemplates] = useState<QuestionTemplate[]>([])
   const [error, setError] = useState<string | null>(null)
+  
+  const { playClick } = useGameSounds()
 
   useEffect(() => {
     let cancelled = false
@@ -32,6 +35,7 @@ export default function HostTemplatesPage() {
 
   function createRoomFromTemplate(templateId: string) {
     if (!hostToken) return
+    playClick()
     setError(null)
     startTransition(async () => {
       const response = await fetch('/api/rooms', {
