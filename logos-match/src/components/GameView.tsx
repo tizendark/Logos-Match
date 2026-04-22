@@ -51,45 +51,6 @@ export function GameView({ roomId }: { roomId: string }) {
     }
   )
 
-  // Finalizar partida si no hay suficientes jugadores
-  useEffect(() => {
-    if (!isHost) return
-    if (loading) return
-    
-    // En Resultados, solo eliminar la sala si ya no queda nadie (todos se salieron)
-    if (gameState.phase === 'RESULTS') {
-      if (players.length === 0 && !closing) {
-        handleCloseGame()
-      }
-    } else {
-      // En pleno juego, eliminar si quedan menos de 2
-      if (players.length < 2 && !closing) {
-        handleCloseGame()
-      }
-    }
-  }, [isHost, loading, players.length, closing, gameState.phase]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Limpieza automática si el Host cierra la pestaña abruptamente
-  useEffect(() => {
-    if (!isHost || !hostToken) return
-
-    const handleUnload = () => {
-      fetch(`/api/rooms/${roomId}`, {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ hostToken }),
-        keepalive: true,
-      }).catch(() => {})
-    }
-
-    window.addEventListener('pagehide', handleUnload)
-    window.addEventListener('beforeunload', handleUnload)
-
-    return () => {
-      window.removeEventListener('pagehide', handleUnload)
-      window.removeEventListener('beforeunload', handleUnload)
-    }
-  }, [isHost, hostToken, roomId])
   // Efecto para sonidos de victoria y resultados de trivia
   const [prevPhase, setPrevPhase] = useState(gameState.phase)
   const [prevRevealed, setPrevRevealed] = useState(gameState.questionRevealed)

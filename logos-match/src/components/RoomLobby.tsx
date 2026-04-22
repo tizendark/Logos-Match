@@ -79,28 +79,6 @@ export function RoomLobby({ roomId }: { roomId: string }) {
     }
   }, [roomId, isHost, router])
 
-  // Limpieza automática si el Host cierra la pestaña abruptamente en el Lobby
-  useEffect(() => {
-    if (!isHost || !hostToken || data.room?.status !== 'lobby') return
-
-    const handleUnload = () => {
-      fetch(`/api/rooms/${roomId}`, {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ hostToken }),
-        keepalive: true,
-      }).catch(() => {})
-    }
-
-    window.addEventListener('pagehide', handleUnload)
-    window.addEventListener('beforeunload', handleUnload)
-
-    return () => {
-      window.removeEventListener('pagehide', handleUnload)
-      window.removeEventListener('beforeunload', handleUnload)
-    }
-  }, [isHost, hostToken, roomId, data.room?.status])
-
   useEffect(() => {
     if (data.room?.status === 'playing') {
       const url = `/room/${roomId}/play${playerId ? `?playerId=${playerId}` : ''}`
