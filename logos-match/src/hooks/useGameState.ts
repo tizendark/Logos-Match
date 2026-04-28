@@ -25,6 +25,8 @@ export function useGameState(
     triquiWinnerId: null,
     questionAnswer: null,
     questionRevealed: false,
+    questionStartedAt: null,
+    questionAnsweredAt: null,
   })
 
   const channelRef = useRef<RealtimeChannel | null>(null)

@@ -31,7 +31,7 @@ export function GameView({ roomId }: { roomId: string }) {
   const isHost = Boolean(hostToken)
   const [closing, setClosing] = useState(false)
   const [showTurnModal, setShowTurnModal] = useState(false)
-  const { isMuted, toggleMute, playPlace, playCorrect, playWrong, playWin, playClick } = useGameSounds()
+  const { isMuted, toggleMute, playPlace, playCorrect, playCorrectPerfect, playWrong, playWin, playClick } = useGameSounds()
 
   // Iniciar latidos para el jugador si no es Host
   usePlayerPresence(!isHost ? playerId : null)
@@ -67,13 +67,22 @@ export function GameView({ roomId }: { roomId: string }) {
     if (gameState.questionRevealed && !prevRevealed) {
       const currentQ = questions[gameState.currentQuestionIndex ?? 0]
       if (currentQ && gameState.questionAnswer === currentQ.correct_index) {
-        playCorrect()
+        const startedAt = gameState.questionStartedAt ?? null
+        const answeredAt = gameState.questionAnsweredAt ?? null
+        const elapsed = typeof startedAt === 'number' && typeof answeredAt === 'number'
+          ? answeredAt - startedAt
+          : null
+        if (typeof elapsed === 'number' && elapsed <= 2500) {
+          playCorrectPerfect()
+        } else {
+          playCorrect()
+        }
       } else if (currentQ) {
         playWrong()
       }
     }
     setPrevRevealed(gameState.questionRevealed)
-  }, [gameState.questionRevealed, prevRevealed, gameState.questionAnswer, gameState.currentQuestionIndex, questions, playCorrect, playWrong])
+  }, [gameState.questionRevealed, prevRevealed, gameState.questionAnswer, gameState.currentQuestionIndex, questions, playCorrect, playCorrectPerfect, playWrong, gameState.questionStartedAt, gameState.questionAnsweredAt])
 
   useEffect(() => {
     if (gameState.phase === 'TRIQUI' && gameState.turn) {
@@ -197,6 +206,10 @@ export function GameView({ roomId }: { roomId: string }) {
           updateGameState({
             phase: 'QUESTION',
             triquiWinnerId: winResult.winner,
+            questionStartedAt: Date.now(),
+            questionAnsweredAt: null,
+            questionAnswer: null,
+            questionRevealed: false,
           })
         } else if (!currentQ) {
           // No hay más preguntas
@@ -278,7 +291,7 @@ export function GameView({ roomId }: { roomId: string }) {
     if (gameState.questionRevealed) return
     if (gameState.triquiWinnerId !== answerPlayerId) return
 
-    updateGameState({ questionAnswer: index })
+    updateGameState({ questionAnswer: index, questionAnsweredAt: Date.now() })
   }
 
   async function handleCloseGame() {
@@ -410,6 +423,8 @@ export function GameView({ roomId }: { roomId: string }) {
                         triquiWinnerId: null,
                         questionAnswer: null,
                         questionRevealed: false,
+                        questionStartedAt: null,
+                        questionAnsweredAt: null,
                       })
                     } else {
                       updateGameState({
@@ -586,6 +601,10 @@ export function GameView({ roomId }: { roomId: string }) {
                     updateGameState({
                       phase: 'QUESTION',
                       triquiWinnerId: winResult.winner,
+                      questionStartedAt: Date.now(),
+                      questionAnsweredAt: null,
+                      questionAnswer: null,
+                      questionRevealed: false,
                     })
                   }}
                 >

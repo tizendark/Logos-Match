@@ -11,6 +11,8 @@ export type GameState = {
   triquiWinnerId?: string | null
   questionAnswer?: number | null // The option index selected
   questionRevealed?: boolean // Host revealed the answer
+  questionStartedAt?: number | null
+  questionAnsweredAt?: number | null
 }
 
 export type WinResult = {

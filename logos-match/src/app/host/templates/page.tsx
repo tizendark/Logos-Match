@@ -14,7 +14,7 @@ export default function HostTemplatesPage() {
   const [templates, setTemplates] = useState<QuestionTemplate[]>([])
   const [error, setError] = useState<string | null>(null)
   
-  const { playClick } = useGameSounds()
+  const { playClick, playClickPrimary } = useGameSounds()
 
   useEffect(() => {
     let cancelled = false
@@ -35,7 +35,7 @@ export default function HostTemplatesPage() {
 
   function createRoomFromTemplate(templateId: string) {
     if (!hostToken) return
-    playClick()
+    playClickPrimary()
     setError(null)
     startTransition(async () => {
       const response = await fetch('/api/rooms', {
@@ -107,4 +107,3 @@ export default function HostTemplatesPage() {
     </div>
   )
 }
-

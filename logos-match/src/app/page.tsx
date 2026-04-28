@@ -24,7 +24,7 @@ export default function Home() {
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
   
-  const { playClick } = useGameSounds()
+  const { playClick, playClickPrimary } = useGameSounds()
   
   // Inicializar estado leyendo sincrónicamente de localStorage (Next.js client-side only workaround)
   const [recentSession, setRecentSession] = useState<{
@@ -49,7 +49,7 @@ export default function Home() {
   })
 
   function onJoin(isReconnect = false) {
-    playClick()
+    playClickPrimary()
     setError(null)
     startTransition(async () => {
       const payload: Record<string, string> = { code: code.trim() }
@@ -103,7 +103,7 @@ export default function Home() {
             type="button"
             className="w-full rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-amber-950 hover:bg-amber-600 transition-colors shadow-sm disabled:opacity-60"
             onClick={() => {
-              playClick()
+              playClickPrimary()
               router.push('/host')
             }}
             disabled={isPending}

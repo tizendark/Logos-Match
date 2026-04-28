@@ -26,7 +26,7 @@ function newQuestion(): DraftQuestionState {
 export default function HostCustomQuizPage() {
   const router = useRouter()
   const hostToken = useHostToken()
-  const { playClick } = useGameSounds()
+  const { playClick, playClickPrimary } = useGameSounds()
   const [isPending, startTransition] = useTransition()
 
   const [title, setTitle] = useState('Quiz personalizado')
@@ -111,7 +111,7 @@ export default function HostCustomQuizPage() {
 
   function createRoom() {
     if (!canCreate || !hostToken) return
-    playClick()
+    playClickPrimary()
     setError(null)
     startTransition(async () => {
       const payload = {
@@ -141,7 +141,7 @@ export default function HostCustomQuizPage() {
   }
 
   function generateWithAi() {
-    playClick()
+    playClickPrimary()
     setError(null)
     const topic = window.prompt('Tema para generar preguntas (ej. Libro de Jonás):')
     if (!topic?.trim()) return
@@ -366,4 +366,3 @@ export default function HostCustomQuizPage() {
     </div>
   )
 }
-

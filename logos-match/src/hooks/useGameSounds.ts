@@ -30,9 +30,11 @@ export function useGameSounds() {
   }, [])
 
   const [playClickRaw] = useSound('/sounds/click.wav', { volume: 0.5, soundEnabled: !isMuted })
+  const [playClickPrimaryRaw] = useSound('/sounds/click-primary.wav', { volume: 0.7, soundEnabled: !isMuted })
   const [playJoinRaw] = useSound('/sounds/join.wav', { volume: 0.6, soundEnabled: !isMuted })
   const [playPlaceRaw] = useSound('/sounds/place.wav', { volume: 0.5, soundEnabled: !isMuted })
   const [playCorrectRaw] = useSound('/sounds/correct.wav', { volume: 0.7, soundEnabled: !isMuted })
+  const [playCorrectPerfectRaw] = useSound('/sounds/correct-perfect.wav', { volume: 0.85, soundEnabled: !isMuted })
   const [playWrongRaw] = useSound('/sounds/wrong.wav', { volume: 0.7, soundEnabled: !isMuted })
   const [playWinRaw] = useSound('/sounds/win.wav', { volume: 0.8, soundEnabled: !isMuted })
 
@@ -40,9 +42,11 @@ export function useGameSounds() {
     isMuted,
     toggleMute,
     playClick: () => playClickRaw(),
+    playClickPrimary: () => playClickPrimaryRaw(),
     playJoin: () => playJoinRaw(),
     playPlace: () => playPlaceRaw(),
     playCorrect: () => playCorrectRaw(),
+    playCorrectPerfect: () => playCorrectPerfectRaw(),
     playWrong: () => playWrongRaw(),
     playWin: () => playWinRaw(),
   }
