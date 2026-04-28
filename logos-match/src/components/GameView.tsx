@@ -16,6 +16,7 @@ import { LogOut, Volume2, VolumeX } from 'lucide-react'
 import { useGameSounds } from '@/hooks/useGameSounds'
 import { triggerConfetti } from '@/utils/confetti'
 import { GameStageTransition } from '@/components/GameStageTransition'
+import { DEFAULT_GAME_CONFIG } from '@/lib/gameConfig'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -72,7 +73,8 @@ export function GameView({ roomId }: { roomId: string }) {
         const elapsed = typeof startedAt === 'number' && typeof answeredAt === 'number'
           ? answeredAt - startedAt
           : null
-        if (typeof elapsed === 'number' && elapsed <= 2500) {
+        const perfectWindowMs = Math.round(DEFAULT_GAME_CONFIG.timing.roundAnswerMs * 0.15)
+        if (typeof elapsed === 'number' && elapsed <= perfectWindowMs) {
           playCorrectPerfect()
         } else {
           playCorrect()
