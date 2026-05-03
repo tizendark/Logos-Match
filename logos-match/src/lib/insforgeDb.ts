@@ -13,10 +13,17 @@ function unwrap<T>(value: InsForgeDbResponse<T>): T {
 }
 
 export function getInsForgeServiceAuth(): InsForgeDbAuth {
-  const baseUrl = process.env.INSFORGE_URL
-  const apiKey = process.env.INSFORGE_SERVICE_KEY
-  if (!baseUrl) throw new Error('Missing INSFORGE_URL')
-  if (!apiKey) throw new Error('Missing INSFORGE_SERVICE_KEY')
+  const baseUrl = process.env.INSFORGE_URL ?? process.env.NEXT_PUBLIC_INSFORGE_URL
+  const apiKey =
+    process.env.INSFORGE_SERVICE_KEY ??
+    process.env.INSFORGE_API_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!baseUrl) throw new Error('Missing INSFORGE_URL (or NEXT_PUBLIC_INSFORGE_URL)')
+  if (!apiKey) {
+    throw new Error(
+      'Missing INSFORGE_SERVICE_KEY (or INSFORGE_API_KEY / SUPABASE_SERVICE_ROLE_KEY)',
+    )
+  }
   return { baseUrl, apiKey }
 }
 

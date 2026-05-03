@@ -75,118 +75,123 @@ async function createRoom(auth: ReturnType<typeof getInsForgeServiceAuth>, data:
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null
+  try {
+    const body = (await request.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null
 
-  const mode = typeof body?.mode === 'string' ? body.mode : ''
-  const hostToken = typeof body?.hostToken === 'string' ? body.hostToken : ''
-  const templateId = typeof body?.templateId === 'string' ? body.templateId : ''
-  const quizRaw = body?.quiz
-  const gameConfig = normalizeGameConfig(body?.gameConfig)
+    const mode = typeof body?.mode === 'string' ? body.mode : ''
+    const hostToken = typeof body?.hostToken === 'string' ? body.hostToken : ''
+    const templateId = typeof body?.templateId === 'string' ? body.templateId : ''
+    const quizRaw = body?.quiz
+    const gameConfig = normalizeGameConfig(body?.gameConfig)
 
-  if (!hostToken) {
-    return NextResponse.json({ error: 'Missing hostToken' }, { status: 400 })
-  }
-  if (mode !== 'template' && mode !== 'custom') {
-    return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
-  }
+    if (!hostToken) {
+      return NextResponse.json({ error: 'Missing hostToken' }, { status: 400 })
+    }
+    if (mode !== 'template' && mode !== 'custom') {
+      return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
+    }
 
-  const auth = getInsForgeServiceAuth()
+    const auth = getInsForgeServiceAuth()
 
-  const sourceType: 'template' | 'custom' = mode
-  let sourceId: string | null = null
-  let questions: Array<{
-    prompt: string
-    options: string[]
-    correct_index: number
-    explanation?: string | null
-  }> = []
+    const sourceType: 'template' | 'custom' = mode
+    let sourceId: string | null = null
+    let questions: Array<{
+      prompt: string
+      options: string[]
+      correct_index: number
+      explanation?: string | null
+    }> = []
 
-  if (mode === 'template') {
-    if (!templateId) {
-      return NextResponse.json(
-        { error: 'Missing templateId' },
-        { status: 400 },
+    if (mode === 'template') {
+      if (!templateId) {
+        return NextResponse.json(
+          { error: 'Missing templateId' },
+          { status: 400 },
+        )
+      }
+
+      const templateQuestions = await dbSelect<TemplateQuestion>(
+        auth,
+        'template_questions',
+        {
+          select: '*',
+          template_id: `eq.${templateId}`,
+          order: 'created_at.asc',
+        },
       )
+
+      sourceId = templateId
+      questions = templateQuestions.map((q) => ({
+        prompt: q.prompt,
+        options: q.options,
+        correct_index: q.correct_index,
+        explanation: q.explanation,
+      }))
     }
 
-    const templateQuestions = await dbSelect<TemplateQuestion>(
-      auth,
-      'template_questions',
-      {
-        select: '*',
-        template_id: `eq.${templateId}`,
-        order: 'created_at.asc',
-      },
-    )
+    if (mode === 'custom') {
+      if (typeof quizRaw !== 'object' || quizRaw === null) {
+        return NextResponse.json({ error: 'Missing quiz' }, { status: 400 })
+      }
+      const quiz = quizRaw as Record<string, unknown>
+      const title = typeof quiz.title === 'string' ? quiz.title.trim() : ''
+      const draftQuestions = normalizeQuestions(quiz.questions)
+      if (!title || !draftQuestions || draftQuestions.length === 0) {
+        return NextResponse.json({ error: 'Invalid quiz' }, { status: 400 })
+      }
 
-    sourceId = templateId
-    questions = templateQuestions.map((q) => ({
+      const createdQuiz = await dbInsert<CustomQuiz | CustomQuiz[]>(
+        auth,
+        'custom_quizzes',
+        { title, host_token: hostToken },
+        { select: '*' },
+      )
+      const customQuiz = Array.isArray(createdQuiz) ? createdQuiz[0] : createdQuiz
+      sourceId = customQuiz.id
+
+      const payload = draftQuestions.map((q) => ({
+        quiz_id: customQuiz.id,
+        prompt: q.prompt,
+        options: q.options,
+        correct_index: q.correctIndex,
+        explanation: q.explanation ?? null,
+      }))
+
+      const createdQuestions = await dbInsert<CustomQuizQuestion[]>(
+        auth,
+        'custom_quiz_questions',
+        payload,
+        { select: '*' },
+      )
+
+      questions = createdQuestions.map((q) => ({
+        prompt: q.prompt,
+        options: q.options,
+        correct_index: q.correct_index,
+        explanation: q.explanation,
+      }))
+    }
+
+    const { room, code } = await createRoom(auth, { hostToken, gameConfig })
+
+    const gameQuestionPayload = questions.map((q, index) => ({
+      room_id: room.id,
+      source_type: sourceType,
+      source_id: sourceId,
       prompt: q.prompt,
       options: q.options,
       correct_index: q.correct_index,
-      explanation: q.explanation,
+      order_index: index,
     }))
+
+    await dbInsert(auth, 'game_questions', gameQuestionPayload, { select: '*' })
+
+    return NextResponse.json({ roomId: room.id, code })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  if (mode === 'custom') {
-    if (typeof quizRaw !== 'object' || quizRaw === null) {
-      return NextResponse.json({ error: 'Missing quiz' }, { status: 400 })
-    }
-    const quiz = quizRaw as Record<string, unknown>
-    const title = typeof quiz.title === 'string' ? quiz.title.trim() : ''
-    const draftQuestions = normalizeQuestions(quiz.questions)
-    if (!title || !draftQuestions || draftQuestions.length === 0) {
-      return NextResponse.json({ error: 'Invalid quiz' }, { status: 400 })
-    }
-
-    const createdQuiz = await dbInsert<CustomQuiz | CustomQuiz[]>(
-      auth,
-      'custom_quizzes',
-      { title, host_token: hostToken },
-      { select: '*' },
-    )
-    const customQuiz = Array.isArray(createdQuiz) ? createdQuiz[0] : createdQuiz
-    sourceId = customQuiz.id
-
-    const payload = draftQuestions.map((q) => ({
-      quiz_id: customQuiz.id,
-      prompt: q.prompt,
-      options: q.options,
-      correct_index: q.correctIndex,
-      explanation: q.explanation ?? null,
-    }))
-
-    const createdQuestions = await dbInsert<CustomQuizQuestion[]>(
-      auth,
-      'custom_quiz_questions',
-      payload,
-      { select: '*' },
-    )
-
-    questions = createdQuestions.map((q) => ({
-      prompt: q.prompt,
-      options: q.options,
-      correct_index: q.correct_index,
-      explanation: q.explanation,
-    }))
-  }
-
-  const { room, code } = await createRoom(auth, { hostToken, gameConfig })
-
-  const gameQuestionPayload = questions.map((q, index) => ({
-    room_id: room.id,
-    source_type: sourceType,
-    source_id: sourceId,
-    prompt: q.prompt,
-    options: q.options,
-    correct_index: q.correct_index,
-    order_index: index,
-  }))
-
-  await dbInsert(auth, 'game_questions', gameQuestionPayload, { select: '*' })
-
-  return NextResponse.json({ roomId: room.id, code })
 }
