@@ -33,15 +33,19 @@ export async function insforgeDbRequest<T>(
   init: RequestInit,
   query: Record<string, string> = {},
 ): Promise<T> {
-  const url = new URL(`/api/database/records/${table}`, auth.baseUrl)
-  for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v)
+  const method = (init.method ?? 'GET').toUpperCase()
+
+  const makeUrl = (path: string) => {
+    const url = new URL(path, auth.baseUrl)
+    for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v)
+    return url
+  }
 
   const headers = new Headers(init.headers)
   if (!headers.has('accept')) headers.set('accept', 'application/json')
   if (!headers.has('content-type') && init.body) {
     headers.set('content-type', 'application/json')
   }
-  const method = (init.method ?? 'GET').toUpperCase()
   if (method !== 'GET' && !headers.has('prefer')) {
     headers.set('prefer', 'return=representation')
   }
@@ -49,7 +53,12 @@ export async function insforgeDbRequest<T>(
   headers.set('apikey', auth.apiKey)
   headers.set('x-api-key', auth.apiKey)
 
-  const response = await fetch(url, { ...init, headers })
+  const primaryUrl = makeUrl(`/api/database/records/${table}`)
+  let response = await fetch(primaryUrl, { ...init, headers })
+  if (response.status === 404) {
+    const fallbackUrl = makeUrl(`/rest/v1/${table}`)
+    response = await fetch(fallbackUrl, { ...init, headers })
+  }
   if (!response.ok) {
     const text = await response.text().catch(() => '')
     const suffix = text ? `: ${text}` : ''
