@@ -1,18 +1,31 @@
-with t as (
+with
+existing as (
+  select id
+  from public.question_templates
+  where title = 'Nivel Básico: Parábolas'
+  limit 1
+),
+inserted as (
   insert into public.question_templates (
     title,
     description,
     difficulty,
     category,
     is_published
-  ) values (
+  )
+  select
     'Nivel Básico: Parábolas',
     'Preguntas introductorias sobre parábolas y enseñanzas de Jesús.',
     'Básico',
     'Evangelios',
     true
-  )
+  where not exists (select 1 from existing)
   returning id
+),
+t as (
+  select id from inserted
+  union all
+  select id from existing
 )
 insert into public.template_questions (
   template_id,
@@ -53,23 +66,41 @@ cross join (
       'El pastor deja las noventa y nueve para buscar la oveja que se perdió.',
       array['parábolas']
     )
-) as q(prompt, options, correct_index, explanation, tags);
+) as q(prompt, options, correct_index, explanation, tags)
+where not exists (
+  select 1
+  from public.template_questions tq
+  where tq.template_id = t.id and tq.prompt = q.prompt
+);
 
-with t as (
+with
+existing as (
+  select id
+  from public.question_templates
+  where title = 'Reto: Profetas Mayores'
+  limit 1
+),
+inserted as (
   insert into public.question_templates (
     title,
     description,
     difficulty,
     category,
     is_published
-  ) values (
+  )
+  select
     'Reto: Profetas Mayores',
     'Preguntas sobre Isaías, Jeremías, Lamentaciones, Ezequiel y Daniel.',
     'Reto',
     'Profetas',
     true
-  )
+  where not exists (select 1 from existing)
   returning id
+),
+t as (
+  select id from inserted
+  union all
+  select id from existing
 )
 insert into public.template_questions (
   template_id,
@@ -103,5 +134,9 @@ cross join (
       'La historia de Daniel en el foso de los leones es un relato conocido de fidelidad.',
       array['profetas','daniel']
     )
-) as q(prompt, options, correct_index, explanation, tags);
-
+) as q(prompt, options, correct_index, explanation, tags)
+where not exists (
+  select 1
+  from public.template_questions tq
+  where tq.template_id = t.id and tq.prompt = q.prompt
+);
