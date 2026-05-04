@@ -55,13 +55,19 @@ export async function insforgeDbRequest<T>(
 
   const primaryUrl = makeUrl(`/api/database/records/${table}`)
   let response = await fetch(primaryUrl, { ...init, headers })
-  if (response.status === 404) {
+  if (response.status === 404 && auth.baseUrl.includes('.supabase.co')) {
     const fallbackUrl = makeUrl(`/rest/v1/${table}`)
     response = await fetch(fallbackUrl, { ...init, headers })
   }
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    const suffix = text ? `: ${text}` : ''
+    const trimmed = text.trim()
+    if (response.status === 404 && trimmed === '{}') {
+      throw new Error(
+        `InsForge DB request failed (404): table not found or unauthorized (${table})`,
+      )
+    }
+    const suffix = trimmed ? `: ${trimmed}` : ''
     throw new Error(`InsForge DB request failed (${response.status})${suffix}`)
   }
 
