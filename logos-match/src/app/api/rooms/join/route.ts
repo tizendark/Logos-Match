@@ -11,10 +11,15 @@ export async function POST(request: Request) {
 
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
-  const existingPlayerId = typeof body?.playerId === 'string' ? body.playerId.trim() : null
-
+  const playerId = typeof body?.playerId === 'string' ? body.playerId.trim() : ''
   if (!code) {
     return NextResponse.json({ error: 'Missing code' }, { status: 400 })
+  }
+  if (!name && !playerId) {
+    return NextResponse.json(
+      { error: 'Missing name or playerId' },
+      { status: 400 },
+    )
   }
 
   const auth = getInsForgeServiceAuth()
@@ -29,30 +34,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Room not found' }, { status: 404 })
   }
 
-  if (existingPlayerId) {
-    // Intentar reconectar
+  if (playerId) {
     const existingPlayers = await dbSelect<RoomPlayer>(auth, 'room_players', {
       select: '*',
-      id: `eq.${existingPlayerId}`,
+      id: `eq.${playerId}`,
       room_id: `eq.${room.id}`,
       limit: '1',
     })
-    const existingPlayer = existingPlayers[0]
-
-    if (existingPlayer) {
-      // Reconectar jugador
+    const existing = existingPlayers[0]
+    if (existing) {
       await dbUpdate(
         auth,
         'room_players',
         { status: 'connected', last_seen_at: new Date().toISOString() },
-        { id: `eq.${existingPlayerId}` }
+        { id: `eq.${playerId}` },
       )
-      return NextResponse.json({ roomId: room.id, playerId: existingPlayer.id, name: existingPlayer.name })
+      return NextResponse.json({
+        roomId: room.id,
+        playerId: existing.id,
+        name: existing.name,
+      })
+    }
+    if (!name) {
+      return NextResponse.json({ error: 'Player not found' }, { status: 404 })
     }
   }
 
-  if (!name) {
-    return NextResponse.json({ error: 'Missing name' }, { status: 400 })
+  const connected = await dbSelect<RoomPlayer>(auth, 'room_players', {
+    select: 'id',
+    room_id: `eq.${room.id}`,
+    status: 'eq.connected',
+    limit: '2',
+  })
+  if (connected.length >= 2) {
+    return NextResponse.json(
+      { error: 'La sala ya está llena (máximo 2 jugadores).' },
+      { status: 409 },
+    )
   }
 
   const created = await dbInsert<RoomPlayer | RoomPlayer[]>(
@@ -65,4 +83,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ roomId: room.id, playerId: player.id, name: player.name })
 }
-

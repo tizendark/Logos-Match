@@ -28,6 +28,19 @@ export async function POST(
     return NextResponse.json({ error: 'Room not found' }, { status: 404 })
   }
 
+  const connected = await dbSelect<RoomPlayer>(auth, 'room_players', {
+    select: 'id',
+    room_id: `eq.${roomId}`,
+    status: 'eq.connected',
+    limit: '2',
+  })
+  if (connected.length >= 2) {
+    return NextResponse.json(
+      { error: 'La sala ya está llena (máximo 2 jugadores).' },
+      { status: 409 },
+    )
+  }
+
   const created = await dbInsert<RoomPlayer | RoomPlayer[]>(
     auth,
     'room_players',
