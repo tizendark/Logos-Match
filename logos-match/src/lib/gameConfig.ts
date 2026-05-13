@@ -9,6 +9,7 @@ export type GameTimingConfig = {
 
 export type GameRuleConfig = {
   maxPlayers: number
+  maxRounds: number
   allowLateJoin: boolean
   lockAnswerAfterSubmit: boolean
 }
@@ -27,6 +28,7 @@ export type GameConfig = {
 
 export const GAME_CONFIG_LIMITS = {
   maxPlayers: { min: 2, max: 20 },
+  maxRounds: { min: 1, max: 50 },
   lobbyReadyTimeoutMs: { min: 10_000, max: 300_000 },
   turnDurationMs: { min: 5_000, max: 120_000 },
   questionDurationMs: { min: 5_000, max: 120_000 },
@@ -51,6 +53,7 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   },
   rules: {
     maxPlayers: 8,
+    maxRounds: 10,
     allowLateJoin: false,
     lockAnswerAfterSubmit: true,
   },

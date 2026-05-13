@@ -1,9 +1,13 @@
 import { motion } from 'framer-motion'
-import type { GameQuestion } from '@/lib/models/quiz'
 import { useGameSounds } from '@/hooks/useGameSounds'
 
 export type QuestionViewProps = {
-  question: GameQuestion
+  question: {
+    prompt: string
+    options: string[]
+    correct_index: number
+    explanation?: string | null
+  }
   playerId: string | null
   triquiWinnerId: string | null
   triquiWinnerName: string

@@ -14,6 +14,15 @@ export type GameState = {
   playerX?: string | null // playerId assigned to X
   playerO?: string | null // playerId assigned to O
   score: Record<string, number> // playerId -> score
+  triviaQuestions?: Array<{
+    prompt: string
+    options: string[]
+    correct_index: number
+    explanation?: string | null
+    category?: string | null
+  }> | null
+  questionsPerSession?: number | null
+  sessionOwnerId?: string | null
   currentQuestionIndex?: number
   triquiWinnerId?: string | null
   questionAnswer?: number | null // The option index selected

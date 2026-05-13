@@ -55,6 +55,12 @@ export function GameView({ roomId }: { roomId: string }) {
       ? rawScoring.triviaCorrect
       : DEFAULT_GAME_CONFIG.scoring.triviaCorrect
 
+  const rawRules = (room?.game_config as { rules?: Record<string, unknown> } | null)?.rules
+  const maxRounds =
+    typeof rawRules?.maxRounds === 'number'
+      ? rawRules.maxRounds
+      : DEFAULT_GAME_CONFIG.rules.maxRounds
+
   const timerRequestInFlightRef = useRef(false)
 
   async function startTimer(durationMs: number) {
@@ -232,7 +238,11 @@ export function GameView({ roomId }: { roomId: string }) {
   }, [gameState, isHost, hostToken, roomId, room])
 
   const winResult = checkWinner(gameState.board)
-  const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
+  const sessionQuestions = Array.isArray(gameState.triviaQuestions)
+    ? gameState.triviaQuestions
+    : []
+  const currentQuestion =
+    sessionQuestions[gameState.currentQuestionIndex ?? 0] ?? null
 
   useEffect(() => {
     if (!isHost) return
@@ -246,6 +256,7 @@ export function GameView({ roomId }: { roomId: string }) {
     }
 
     if (gameState.phase === 'QUESTION') {
+      if (!currentQuestion) return
       if (gameState.questionRevealed) return
       if (gameState.questionAnswer !== null) return
       if (!gameState.timerStartTimestamp || !gameState.timerDurationMs) {
@@ -254,6 +265,7 @@ export function GameView({ roomId }: { roomId: string }) {
     }
 
     if (gameState.phase === 'STEAL_ATTEMPT') {
+      if (!currentQuestion) return
       if (gameState.questionRevealed) return
       if (gameState.questionAnswer !== null) return
       if (!gameState.timerStartTimestamp || !gameState.timerDurationMs) {
@@ -265,8 +277,10 @@ export function GameView({ roomId }: { roomId: string }) {
     isHost,
     winResult.winner,
     winResult.isDraw,
+    currentQuestion,
     gameState.phase,
     gameState.turn,
+    gameState.currentQuestionIndex,
     gameState.questionRevealed,
     gameState.questionAnswer,
     gameState.timerStartTimestamp,
@@ -444,34 +458,57 @@ export function GameView({ roomId }: { roomId: string }) {
         updateGameState({ timerStartTimestamp: null, timerDurationMs: null })
       }
       timeout = window.setTimeout(() => {
-        const currentQ = questions[gameState.currentQuestionIndex ?? 0]
-        if (winResult.winner && currentQ) {
-          updateGameState({
-            phase: 'QUESTION',
-            triquiWinnerId: winResult.winner,
-            questionStartedAt: Date.now(),
-            questionAnsweredAt: null,
-            questionAnswer: null,
-            questionRevealed: false,
-            timerStartTimestamp: null,
-            timerDurationMs: null,
-          })
-        } else if (!currentQ) {
-          // No hay más preguntas
-          updateGameState({
-            phase: 'RESULTS',
-            timerStartTimestamp: null,
-            timerDurationMs: null,
-          })
-        } else {
-          // Empate y sí hay preguntas, resetear tablero
+        if (winResult.isDraw) {
           updateGameState({
             board: Array(9).fill(null),
             turn: gameState.playerO,
             timerStartTimestamp: null,
             timerDurationMs: null,
           })
+          return
         }
+
+        if (!winResult.winner || !hostToken) return
+
+        const questionsPerSession = 2 + Math.floor(Math.random() * 3)
+
+        fetch(`/api/rooms/${roomId}/trivia-session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ hostToken, count: questionsPerSession }),
+        })
+          .then((r) => r.json())
+          .then((payload) => {
+            const qs = Array.isArray(payload?.questions) ? payload.questions : []
+            if (!qs.length) {
+              updateGameState({
+                phase: 'RESULTS',
+                timerStartTimestamp: null,
+                timerDurationMs: null,
+              })
+              return
+            }
+
+            updateGameState({
+              phase: 'QUESTION',
+              triviaQuestions: qs.slice(0, questionsPerSession),
+              questionsPerSession,
+              sessionOwnerId: winResult.winner,
+              currentQuestionIndex: 0,
+              triquiWinnerId: winResult.winner,
+              questionAnswer: null,
+              questionRevealed: false,
+              questionStartedAt: Date.now(),
+              questionAnsweredAt: null,
+              roundPrevScore: null,
+              roundAwardedToId: null,
+              roundWasSteal: null,
+              timerStartTimestamp: null,
+              timerDurationMs: null,
+            })
+            void startTimer(questionDurationMs)
+          })
+          .catch(() => {})
       }, 5000)
     }
 
@@ -483,13 +520,13 @@ export function GameView({ roomId }: { roomId: string }) {
     gameState.phase,
     winResult.winner,
     winResult.isDraw,
-    gameState.questionRevealed,
-    gameState.currentQuestionIndex,
-    gameState.questionAnswer,
-    gameState.triquiWinnerId,
-    gameState.score,
     gameState.playerO,
-    questions,
+    gameState.timerStartTimestamp,
+    gameState.timerDurationMs,
+    roomId,
+    hostToken,
+    questionDurationMs,
+    startTimer,
     updateGameState,
   ])
 
@@ -567,7 +604,7 @@ export function GameView({ roomId }: { roomId: string }) {
     const aPlayer = players.find((p) => p.id === gameState.playerX) ?? null
     const bPlayer = players.find((p) => p.id === gameState.playerO) ?? null
     const prevScore = gameState.roundPrevScore ?? {}
-    const maxScore = Math.max(1, questions.length * triviaCorrect)
+    const maxScore = Math.max(1, maxRounds * triviaCorrect)
     const awardedTo = gameState.roundAwardedToId ?? null
     const awardedName = awardedTo
       ? players.find((p) => p.id === awardedTo)?.name ?? '—'
@@ -575,7 +612,14 @@ export function GameView({ roomId }: { roomId: string }) {
     const wasSteal = Boolean(gameState.roundWasSteal)
 
     const nextIndex = (gameState.currentQuestionIndex ?? 0) + 1
-    const hasMoreQuestions = nextIndex < questions.length
+    const sessionTotal =
+      typeof gameState.questionsPerSession === 'number'
+        ? gameState.questionsPerSession
+        : sessionQuestions.length
+    const hasMoreQuestions = nextIndex < Math.max(0, sessionTotal)
+    const reachedGoal = Object.values(gameState.score ?? {}).some(
+      (s) => typeof s === 'number' && s >= maxScore,
+    )
 
     content = (
       <div key="round-results" className="flex flex-1 flex-col items-center bg-stone-50 px-4 py-8 text-slate-900 h-full w-full">
@@ -609,9 +653,30 @@ export function GameView({ roomId }: { roomId: string }) {
               className="w-full rounded-xl bg-slate-900 px-4 py-3 font-bold text-white shadow-sm"
               onClick={() => {
                 playClick()
-                if (!hasMoreQuestions) {
+                if (reachedGoal) {
                   updateGameState({
                     phase: 'RESULTS',
+                    triviaQuestions: null,
+                    questionsPerSession: null,
+                    sessionOwnerId: null,
+                    currentQuestionIndex: 0,
+                    roundPrevScore: null,
+                    roundAwardedToId: null,
+                    roundWasSteal: null,
+                    timerStartTimestamp: null,
+                    timerDurationMs: null,
+                  })
+                  return
+                }
+                if (hasMoreQuestions) {
+                  updateGameState({
+                    phase: 'QUESTION',
+                    currentQuestionIndex: nextIndex,
+                    triquiWinnerId: gameState.sessionOwnerId ?? null,
+                    questionAnswer: null,
+                    questionRevealed: false,
+                    questionStartedAt: Date.now(),
+                    questionAnsweredAt: null,
                     roundPrevScore: null,
                     roundAwardedToId: null,
                     roundWasSteal: null,
@@ -624,7 +689,10 @@ export function GameView({ roomId }: { roomId: string }) {
                   phase: 'TRIQUI',
                   board: Array(9).fill(null),
                   turn: gameState.playerO,
-                  currentQuestionIndex: nextIndex,
+                  triviaQuestions: null,
+                  questionsPerSession: null,
+                  sessionOwnerId: null,
+                  currentQuestionIndex: 0,
                   triquiWinnerId: null,
                   questionAnswer: null,
                   questionRevealed: false,
@@ -638,7 +706,11 @@ export function GameView({ roomId }: { roomId: string }) {
                 })
               }}
             >
-              {hasMoreQuestions ? 'Siguiente Ronda' : 'Ver Resultados Finales'}
+              {reachedGoal
+                ? 'Ver Resultados Finales'
+                : hasMoreQuestions
+                  ? 'Siguiente Pregunta'
+                  : 'Siguiente Ronda'}
             </button>
           ) : (
             <div className="text-center text-sm text-stone-500">
@@ -699,17 +771,50 @@ export function GameView({ roomId }: { roomId: string }) {
             playBuzzer={playWrong}
           />
 
-          <QuestionView
-            question={currentQuestion}
-            playerId={playerId}
-            triquiWinnerId={gameState.triquiWinnerId ?? null}
-            triquiWinnerName={triquiWinnerName}
-            isHost={isHost}
-            mode={isStealAttempt ? 'steal' : 'question'}
-            answer={gameState.questionAnswer ?? null}
-            revealed={gameState.questionRevealed ?? false}
-            onAnswer={(index) => handleAnswer(index, isHost ? (gameState.triquiWinnerId ?? null) : playerId)}
-          />
+          {typeof gameState.questionsPerSession === 'number' ? (
+            <div className="flex items-center justify-between rounded-xl bg-white px-4 py-3 shadow-sm border border-stone-100">
+              <div className="text-sm font-bold text-slate-900">
+                Pregunta {(gameState.currentQuestionIndex ?? 0) + 1} de {gameState.questionsPerSession}
+              </div>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: gameState.questionsPerSession }).map((_, i) => (
+                  <motion.div
+                    key={i}
+                    className={`h-2 w-2 rounded-full ${
+                      i <= (gameState.currentQuestionIndex ?? 0)
+                        ? 'bg-emerald-500'
+                        : 'bg-stone-200'
+                    }`}
+                    animate={
+                      i === (gameState.currentQuestionIndex ?? 0)
+                        ? { scale: [1, 1.25, 1] }
+                        : { scale: 1 }
+                    }
+                    transition={{ duration: 0.35 }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <motion.div
+            key={`q-${gameState.currentQuestionIndex ?? 0}-${gameState.phase}`}
+            initial={{ x: 40, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.22 }}
+          >
+            <QuestionView
+              question={currentQuestion}
+              playerId={playerId}
+              triquiWinnerId={gameState.triquiWinnerId ?? null}
+              triquiWinnerName={triquiWinnerName}
+              isHost={isHost}
+              mode={isStealAttempt ? 'steal' : 'question'}
+              answer={gameState.questionAnswer ?? null}
+              revealed={gameState.questionRevealed ?? false}
+              onAnswer={(index) => handleAnswer(index, isHost ? (gameState.triquiWinnerId ?? null) : playerId)}
+            />
+          </motion.div>
 
           {isHost ? (
             <div className="flex flex-col gap-3">
