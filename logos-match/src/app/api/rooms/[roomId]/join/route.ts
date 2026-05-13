@@ -44,10 +44,10 @@ export async function POST(
   const created = await dbInsert<RoomPlayer | RoomPlayer[]>(
     auth,
     'room_players',
-    { room_id: roomId, name },
+    { room_id: roomId, name, status: 'connected', last_seen_at: new Date().toISOString() },
     { select: '*' },
   )
   const player = Array.isArray(created) ? created[0] : created
 
-  return NextResponse.json({ playerId: player.id })
+  return NextResponse.json({ playerId: player.id, name: player.name })
 }

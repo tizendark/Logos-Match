@@ -27,6 +27,8 @@ export function useGameState(
     questionRevealed: false,
     questionStartedAt: null,
     questionAnsweredAt: null,
+    timerStartTimestamp: null,
+    timerDurationMs: null,
   })
 
   const channelRef = useRef<RealtimeChannel | null>(null)

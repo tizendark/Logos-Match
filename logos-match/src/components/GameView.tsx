@@ -17,6 +17,7 @@ import { useGameSounds } from '@/hooks/useGameSounds'
 import { triggerConfetti } from '@/utils/confetti'
 import { GameStageTransition } from '@/components/GameStageTransition'
 import { DEFAULT_GAME_CONFIG } from '@/lib/gameConfig'
+import { GameTimer } from '@/components/GameTimer'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -33,6 +34,44 @@ export function GameView({ roomId }: { roomId: string }) {
   const { isMuted, toggleMute, playPlace, playCorrect, playCorrectPerfect, playWrong, playWin, playClick } = useGameSounds()
 
   usePlayerPresence(!isHost ? playerId : null)
+
+  const rawTiming = (room?.game_config as { timing?: Record<string, unknown> } | null)?.timing
+  const turnDurationMs =
+    typeof rawTiming?.turnDurationMs === 'number'
+      ? rawTiming.turnDurationMs
+      : DEFAULT_GAME_CONFIG.timing.turnDurationMs
+  const questionDurationMs =
+    typeof rawTiming?.questionDurationMs === 'number'
+      ? rawTiming.questionDurationMs
+      : typeof rawTiming?.roundAnswerMs === 'number'
+        ? rawTiming.roundAnswerMs
+        : DEFAULT_GAME_CONFIG.timing.roundAnswerMs
+
+  async function startTimer(durationMs: number) {
+    if (!isHost || !hostToken) return
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/timer`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hostToken, durationMs }),
+      })
+      if (!res.ok) return
+      const payload = (await res.json().catch(() => null)) as
+        | { timerStartTimestamp?: number; timerDurationMs?: number }
+        | null
+      const timerStartTimestamp =
+        typeof payload?.timerStartTimestamp === 'number'
+          ? payload.timerStartTimestamp
+          : null
+      const timerDurationMs =
+        typeof payload?.timerDurationMs === 'number' ? payload.timerDurationMs : null
+      if (timerStartTimestamp && timerDurationMs) {
+        updateGameState({ timerStartTimestamp, timerDurationMs })
+      }
+    } catch {
+      return
+    }
+  }
 
   const { gameState, updateGameState, sendPlayerAction, closeRoomBroadcast } = useGameState(
     roomId,
@@ -135,7 +174,10 @@ export function GameView({ roomId }: { roomId: string }) {
               playerX: pX,
               playerO: pO,
               turn: pX, // Empieza el jugador X
+              timerStartTimestamp: null,
+              timerDurationMs: null,
             })
+            void startTimer(turnDurationMs)
           }
         }
       } catch (error) {
@@ -160,6 +202,89 @@ export function GameView({ roomId }: { roomId: string }) {
   }, [gameState, isHost, hostToken, roomId, room])
 
   const winResult = checkWinner(gameState.board)
+
+  useEffect(() => {
+    if (!isHost) return
+    if (winResult.winner || winResult.isDraw) return
+
+    if (gameState.phase === 'TRIQUI' && gameState.turn) {
+      if (!gameState.timerStartTimestamp || !gameState.timerDurationMs) {
+        void startTimer(turnDurationMs)
+      }
+      return
+    }
+
+    if (gameState.phase === 'QUESTION') {
+      if (gameState.questionRevealed) return
+      if (gameState.questionAnswer !== null) return
+      if (!gameState.timerStartTimestamp || !gameState.timerDurationMs) {
+        void startTimer(questionDurationMs)
+      }
+    }
+  }, [
+    isHost,
+    winResult.winner,
+    winResult.isDraw,
+    gameState.phase,
+    gameState.turn,
+    gameState.questionRevealed,
+    gameState.questionAnswer,
+    gameState.timerStartTimestamp,
+    gameState.timerDurationMs,
+    turnDurationMs,
+    questionDurationMs,
+  ])
+
+  useEffect(() => {
+    if (!isHost) return
+    const start = gameState.timerStartTimestamp ?? null
+    const duration = gameState.timerDurationMs ?? null
+    if (!start || !duration) return
+
+    const remaining = start + duration - Date.now()
+    if (remaining <= 0) return
+
+    const timeoutId = window.setTimeout(() => {
+      if (winResult.winner || winResult.isDraw) return
+
+      if (gameState.phase === 'TRIQUI' && gameState.turn) {
+        const nextTurn =
+          gameState.turn === gameState.playerX ? gameState.playerO : gameState.playerX
+        updateGameState({
+          turn: nextTurn ?? null,
+          timerStartTimestamp: null,
+          timerDurationMs: null,
+        })
+        if (nextTurn) void startTimer(turnDurationMs)
+        return
+      }
+
+      if (gameState.phase === 'QUESTION') {
+        if (gameState.questionRevealed) return
+        if (gameState.questionAnswer !== null) return
+        updateGameState({
+          questionRevealed: true,
+          timerStartTimestamp: null,
+          timerDurationMs: null,
+        })
+      }
+    }, remaining + 20)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    isHost,
+    gameState.timerStartTimestamp,
+    gameState.timerDurationMs,
+    gameState.phase,
+    gameState.turn,
+    gameState.playerX,
+    gameState.playerO,
+    gameState.questionRevealed,
+    gameState.questionAnswer,
+    winResult.winner,
+    winResult.isDraw,
+    turnDurationMs,
+  ])
 
   // Trigger confetti when someone wins a round
   const [prevWinner, setPrevWinner] = useState<string | null>(null)
@@ -194,7 +319,10 @@ export function GameView({ roomId }: { roomId: string }) {
     updateGameState({
       board: newBoard,
       turn: newTurn,
+      timerStartTimestamp: null,
+      timerDurationMs: null,
     })
+    void startTimer(turnDurationMs)
   }
 
   // Lógica de avance automático para el Host
@@ -205,6 +333,9 @@ export function GameView({ roomId }: { roomId: string }) {
 
     // Si la fase es Triqui y hay un resultado definitivo, esperar 5s y avanzar
     if (gameState.phase === 'TRIQUI' && (winResult.winner || winResult.isDraw)) {
+      if (gameState.timerStartTimestamp || gameState.timerDurationMs) {
+        updateGameState({ timerStartTimestamp: null, timerDurationMs: null })
+      }
       timeout = window.setTimeout(() => {
         const currentQ = questions[gameState.currentQuestionIndex ?? 0]
         if (winResult.winner && currentQ) {
@@ -215,17 +346,23 @@ export function GameView({ roomId }: { roomId: string }) {
             questionAnsweredAt: null,
             questionAnswer: null,
             questionRevealed: false,
+            timerStartTimestamp: null,
+            timerDurationMs: null,
           })
         } else if (!currentQ) {
           // No hay más preguntas
           updateGameState({
-            phase: 'RESULTS'
+            phase: 'RESULTS',
+            timerStartTimestamp: null,
+            timerDurationMs: null,
           })
         } else {
           // Empate y sí hay preguntas, resetear tablero
           updateGameState({
             board: Array(9).fill(null),
             turn: gameState.playerO,
+            timerStartTimestamp: null,
+            timerDurationMs: null,
           })
         }
       }, 5000)
@@ -256,11 +393,15 @@ export function GameView({ roomId }: { roomId: string }) {
             triquiWinnerId: null,
             questionAnswer: null,
             questionRevealed: false,
+            timerStartTimestamp: null,
+            timerDurationMs: null,
           })
         } else {
           updateGameState({
             phase: 'RESULTS',
             score: newScore,
+            timerStartTimestamp: null,
+            timerDurationMs: null,
           })
         }
       }, 5000)
@@ -296,7 +437,12 @@ export function GameView({ roomId }: { roomId: string }) {
     if (gameState.questionRevealed) return
     if (gameState.triquiWinnerId !== answerPlayerId) return
 
-    updateGameState({ questionAnswer: index, questionAnsweredAt: Date.now() })
+    updateGameState({
+      questionAnswer: index,
+      questionAnsweredAt: Date.now(),
+      timerStartTimestamp: null,
+      timerDurationMs: null,
+    })
   }
 
   async function handleCloseGame() {
@@ -380,6 +526,13 @@ export function GameView({ roomId }: { roomId: string }) {
             </div>
           </div>
 
+          <GameTimer
+            startTimestamp={gameState.timerStartTimestamp ?? null}
+            durationMs={gameState.timerDurationMs ?? null}
+            playTick={playClick}
+            playBuzzer={playWrong}
+          />
+
           <QuestionView
             question={currentQuestion}
             playerId={playerId}
@@ -397,7 +550,11 @@ export function GameView({ roomId }: { roomId: string }) {
                 <button
                   onClick={() => {
                     playClick()
-                    updateGameState({ questionRevealed: true })
+                    updateGameState({
+                      questionRevealed: true,
+                      timerStartTimestamp: null,
+                      timerDurationMs: null,
+                    })
                   }}
                   disabled={gameState.questionAnswer === null}
                   className="w-full rounded-xl bg-zinc-950 px-4 py-3 font-medium text-white shadow-sm disabled:opacity-50"
@@ -430,11 +587,15 @@ export function GameView({ roomId }: { roomId: string }) {
                         questionRevealed: false,
                         questionStartedAt: null,
                         questionAnsweredAt: null,
+                        timerStartTimestamp: null,
+                        timerDurationMs: null,
                       })
                     } else {
                       updateGameState({
                         phase: 'RESULTS',
                         score: newScore,
+                        timerStartTimestamp: null,
+                        timerDurationMs: null,
                       })
                     }
                   }}
@@ -510,6 +671,13 @@ export function GameView({ roomId }: { roomId: string }) {
               ) : null}
             </div>
           </div>
+
+          <GameTimer
+            startTimestamp={gameState.timerStartTimestamp ?? null}
+            durationMs={gameState.timerDurationMs ?? null}
+            playTick={playClick}
+            playBuzzer={playWrong}
+          />
 
           <div className="text-center">
             <h1 className="text-xl font-bold tracking-tight">Triqui</h1>
@@ -616,6 +784,8 @@ export function GameView({ roomId }: { roomId: string }) {
                       questionAnsweredAt: null,
                       questionAnswer: null,
                       questionRevealed: false,
+                      timerStartTimestamp: null,
+                      timerDurationMs: null,
                     })
                   }}
                 >
@@ -632,11 +802,17 @@ export function GameView({ roomId }: { roomId: string }) {
                 onClick={() => {
                   playClick()
                   if (!currentQuestion) {
-                    updateGameState({ phase: 'RESULTS' })
+                    updateGameState({
+                      phase: 'RESULTS',
+                      timerStartTimestamp: null,
+                      timerDurationMs: null,
+                    })
                   } else {
                     updateGameState({
                       board: Array(9).fill(null),
                       turn: gameState.playerO, // Cambiar quién empieza
+                      timerStartTimestamp: null,
+                      timerDurationMs: null,
                     })
                   }
                 }}

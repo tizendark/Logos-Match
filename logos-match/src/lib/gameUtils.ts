@@ -13,6 +13,8 @@ export type GameState = {
   questionRevealed?: boolean // Host revealed the answer
   questionStartedAt?: number | null
   questionAnsweredAt?: number | null
+  timerStartTimestamp?: number | null
+  timerDurationMs?: number | null
 }
 
 export type WinResult = {
