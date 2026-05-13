@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { dbSelect, getInsForgeServiceAuth } from '@/lib/insforgeDb'
-import type { QuestionTemplate, TemplateQuestion, Room } from '@/lib/models/quiz'
+import type { GameQuestion, Room } from '@/lib/models/quiz'
 
 function shuffle<T>(items: T[]) {
   const arr = [...items]
@@ -51,100 +51,24 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const templates = await dbSelect<QuestionTemplate>(auth, 'question_templates', {
-      select: 'id,title,category,is_published',
-      is_published: 'eq.true',
-      order: 'created_at.desc',
-      limit: '50',
+    const pool = await dbSelect<GameQuestion>(auth, 'game_questions', {
+      select: 'prompt,options,correct_index',
+      room_id: `eq.${roomId}`,
+      order: 'order_index.asc',
+      limit: '200',
     })
-
-    const byCategory = new Map<string, QuestionTemplate[]>()
-    for (const t of templates) {
-      const key = (t.category ?? 'General').trim() || 'General'
-      byCategory.set(key, [...(byCategory.get(key) ?? []), t])
-    }
-
-    const categories = shuffle(Array.from(byCategory.keys()))
-    const pickedTemplates: QuestionTemplate[] = []
-    for (const cat of categories) {
-      const group = byCategory.get(cat) ?? []
-      const candidate = shuffle(group)[0]
-      if (candidate) pickedTemplates.push(candidate)
-      if (pickedTemplates.length >= Math.min(target, 8)) break
-    }
-
-    const fallbackTemplates = shuffle(templates).slice(0, 8)
-    for (const t of fallbackTemplates) {
-      if (pickedTemplates.find((x) => x.id === t.id)) continue
-      pickedTemplates.push(t)
-      if (pickedTemplates.length >= 8) break
-    }
-
-    const questionsByTemplate = new Map<string, { category: string; questions: TemplateQuestion[] }>()
-    for (const t of pickedTemplates) {
-      const qs = await dbSelect<TemplateQuestion>(auth, 'template_questions', {
-        select: 'prompt,options,correct_index,explanation,template_id',
-        template_id: `eq.${t.id}`,
-        order: 'created_at.asc',
-        limit: '50',
-      })
-      questionsByTemplate.set(t.id, {
-        category: t.category ?? 'General',
-        questions: shuffle(qs),
-      })
+    if (!pool.length) {
+      return NextResponse.json({ error: 'No questions in room' }, { status: 404 })
     }
 
     const result: Array<{
       prompt: string
       options: string[]
       correct_index: number
-      explanation?: string | null
-      category?: string | null
     }> = []
 
-    const templateCycle = shuffle(Array.from(questionsByTemplate.entries()))
-    let safety = 0
-    while (result.length < target && safety < 200) {
-      safety++
-      for (const [templateId, entry] of templateCycle) {
-        const pool = entry.questions
-        const q = pool.shift()
-        if (!q) continue
-        result.push({
-          prompt: q.prompt,
-          options: q.options,
-          correct_index: q.correct_index,
-          explanation: q.explanation,
-          category: entry.category,
-        })
-        if (result.length >= target) break
-      }
-      if (templateCycle.every(([, e]) => e.questions.length === 0)) break
-    }
-
-    if (result.length < target) {
-      const allPool: Array<{
-        prompt: string
-        options: string[]
-        correct_index: number
-        explanation?: string | null
-        category?: string | null
-      }> = []
-      for (const [, entry] of templateCycle) {
-        for (const q of entry.questions) {
-          allPool.push({
-            prompt: q.prompt,
-            options: q.options,
-            correct_index: q.correct_index,
-            explanation: q.explanation,
-            category: entry.category,
-          })
-        }
-      }
-      for (const q of shuffle(allPool)) {
-        if (result.length >= target) break
-        result.push(q)
-      }
+    for (const q of shuffle(pool).slice(0, target)) {
+      result.push({ prompt: q.prompt, options: q.options, correct_index: q.correct_index })
     }
 
     return NextResponse.json({ questions: result })
