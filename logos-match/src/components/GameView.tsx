@@ -27,14 +27,11 @@ export function GameView({ roomId }: { roomId: string }) {
   const [questions, setQuestions] = useState<GameQuestion[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Asumimos isHost si tenemos hostToken en localStorage,
-  // luego validaremos con la sala real.
-  const isHost = Boolean(hostToken)
+  const isHost = Boolean(hostToken && room?.host_token === hostToken)
   const [closing, setClosing] = useState(false)
   const [showTurnModal, setShowTurnModal] = useState(false)
   const { isMuted, toggleMute, playPlace, playCorrect, playCorrectPerfect, playWrong, playWin, playClick } = useGameSounds()
 
-  // Iniciar latidos para el jugador si no es Host
   usePlayerPresence(!isHost ? playerId : null)
 
   const { gameState, updateGameState, sendPlayerAction, closeRoomBroadcast } = useGameState(
