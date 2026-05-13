@@ -23,7 +23,7 @@ export function QuestionView({
   revealed,
   onAnswer,
 }: QuestionViewProps) {
-  const canAnswer = playerId === triquiWinnerId && !revealed && answer === null
+  const canAnswer = !isHost && playerId === triquiWinnerId && !revealed && answer === null
   const { playClick } = useGameSounds()
 
   return (
@@ -58,7 +58,7 @@ export function QuestionView({
             else btnClass = 'border-zinc-100 bg-zinc-50 text-zinc-400 opacity-50'
           } else if (isSelected) {
             btnClass = 'border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-500/20'
-          } else if (canAnswer || isHost) {
+          } else if (canAnswer) {
             btnClass = 'border-zinc-200 bg-white text-zinc-900 hover:border-zinc-300'
           }
 
@@ -70,10 +70,10 @@ export function QuestionView({
                 visible: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0.4 } },
               }}
               type="button"
-              whileTap={canAnswer || (isHost && !revealed) ? { scale: 0.92 } : undefined}
-              disabled={(!canAnswer && !isHost) || revealed}
+              whileTap={canAnswer ? { scale: 0.92 } : undefined}
+              disabled={!canAnswer || revealed}
               onClick={() => {
-                if (canAnswer || (isHost && !revealed)) {
+                if (canAnswer) {
                   playClick()
                   onAnswer(idx)
                 }

@@ -36,8 +36,8 @@ export async function POST(
   })
   if (connected.length >= 2) {
     return NextResponse.json(
-      { error: 'La sala ya está llena (máximo 2 jugadores).' },
-      { status: 409 },
+      { error: 'Room Full' },
+      { status: 403 },
     )
   }
 

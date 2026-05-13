@@ -34,10 +34,6 @@ export function usePlayerPresence(playerId: string | null) {
       window.clearInterval(intervalId)
       window.removeEventListener('pagehide', handleUnload)
       window.removeEventListener('beforeunload', handleUnload)
-      // Si el componente se desmonta normalmente (no por recarga), también enviamos leave
-      if (!isUnloading) {
-        handleUnload()
-      }
     }
   }, [playerId])
 }

@@ -107,6 +107,12 @@ export function GameView({ roomId }: { roomId: string }) {
         setRoom(data.room)
         setPlayers(data.players || [])
         if (data.questions) setQuestions(data.questions)
+        console.log('GameView load', {
+          playerId,
+          isHost,
+          players: Array.isArray(data.players) ? data.players.length : 0,
+          turn: (data.room?.current_state as { turn?: unknown } | undefined)?.turn ?? null,
+        })
 
         // Si es Host y el estado actual de la sala estaba vacío, inicializamos el juego
         if (isHost && data.room?.host_token === hostToken) {
@@ -582,8 +588,14 @@ export function GameView({ roomId }: { roomId: string }) {
 
           <TicTacToeBoard
             board={gameState.board}
-            onMove={(index) => handleMove(index, isHost ? gameState.turn : playerId)}
-            disabled={(!isHost && playerId !== gameState.turn) || !!winResult.winner || winResult.isDraw}
+            onMove={(index) => handleMove(index, playerId)}
+            disabled={
+              isHost ||
+              !playerId ||
+              playerId !== gameState.turn ||
+              !!winResult.winner ||
+              winResult.isDraw
+            }
             winnerLine={winResult.line}
             player1Id={gameState.playerX ?? null}
             player2Id={gameState.playerO ?? null}

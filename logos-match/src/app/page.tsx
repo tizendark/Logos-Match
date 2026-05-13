@@ -68,7 +68,11 @@ export default function Home() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => null)
-        setError(data?.error ?? 'No se pudo unir a la sala')
+        if (response.status === 403 && data?.error === 'Room Full') {
+          setError('Sala llena')
+        } else {
+          setError(data?.error ?? 'No se pudo unir a la sala')
+        }
         if (isReconnect) {
           // Si la reconexión falló (sala expiró, etc), limpiamos la sesión
           localStorage.removeItem('logosmatch_player_session')

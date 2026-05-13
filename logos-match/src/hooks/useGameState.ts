@@ -79,7 +79,13 @@ export function useGameState(
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (!isHost) {
+          if (isHost) {
+            channel.send({
+              type: 'broadcast',
+              event: 'sync_state',
+              payload: gameStateRef.current,
+            })
+          } else {
             channel.send({
               type: 'broadcast',
               event: 'sync_request',
