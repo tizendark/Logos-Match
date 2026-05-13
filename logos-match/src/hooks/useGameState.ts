@@ -29,6 +29,9 @@ export function useGameState(
     questionAnsweredAt: null,
     timerStartTimestamp: null,
     timerDurationMs: null,
+    roundPrevScore: null,
+    roundAwardedToId: null,
+    roundWasSteal: null,
   })
 
   const channelRef = useRef<RealtimeChannel | null>(null)

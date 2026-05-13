@@ -19,6 +19,7 @@ import { triggerConfetti } from '@/utils/confetti'
 import { GameStageTransition } from '@/components/GameStageTransition'
 import { DEFAULT_GAME_CONFIG } from '@/lib/gameConfig'
 import { GameTimer } from '@/components/GameTimer'
+import { RoundScoreboard } from '@/components/RoundScoreboard'
 
 export function GameView({ roomId }: { roomId: string }) {
   const hostToken = useHostToken()
@@ -47,6 +48,12 @@ export function GameView({ roomId }: { roomId: string }) {
       : typeof rawTiming?.roundAnswerMs === 'number'
         ? rawTiming.roundAnswerMs
         : DEFAULT_GAME_CONFIG.timing.roundAnswerMs
+
+  const rawScoring = (room?.game_config as { scoring?: Record<string, unknown> } | null)?.scoring
+  const triviaCorrect =
+    typeof rawScoring?.triviaCorrect === 'number'
+      ? rawScoring.triviaCorrect
+      : DEFAULT_GAME_CONFIG.scoring.triviaCorrect
 
   const timerRequestInFlightRef = useRef(false)
 
@@ -225,6 +232,7 @@ export function GameView({ roomId }: { roomId: string }) {
   }, [gameState, isHost, hostToken, roomId, room])
 
   const winResult = checkWinner(gameState.board)
+  const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
 
   useEffect(() => {
     if (!isHost) return
@@ -252,6 +260,7 @@ export function GameView({ roomId }: { roomId: string }) {
         void startTimer(5000)
       }
     }
+    if (gameState.phase === 'ROUND_RESULTS') return
   }, [
     isHost,
     winResult.winner,
@@ -264,6 +273,44 @@ export function GameView({ roomId }: { roomId: string }) {
     gameState.timerDurationMs,
     turnDurationMs,
     questionDurationMs,
+  ])
+
+  useEffect(() => {
+    if (!isHost) return
+    if (gameState.phase !== 'QUESTION' && gameState.phase !== 'STEAL_ATTEMPT') return
+    if (!gameState.questionRevealed) return
+    if (!currentQuestion) return
+
+    const isCorrectAnswer = gameState.questionAnswer === currentQuestion.correct_index
+    const prevScore = { ...(gameState.score ?? {}) }
+    const nextScore = { ...prevScore }
+
+    const awardedToId =
+      isCorrectAnswer && gameState.triquiWinnerId ? gameState.triquiWinnerId : null
+
+    if (awardedToId) {
+      nextScore[awardedToId] = (nextScore[awardedToId] || 0) + triviaCorrect
+    }
+
+    updateGameState({
+      phase: 'ROUND_RESULTS',
+      score: nextScore,
+      roundPrevScore: prevScore,
+      roundAwardedToId: awardedToId,
+      roundWasSteal: gameState.phase === 'STEAL_ATTEMPT',
+      timerStartTimestamp: null,
+      timerDurationMs: null,
+    })
+  }, [
+    isHost,
+    gameState.phase,
+    gameState.questionRevealed,
+    gameState.questionAnswer,
+    gameState.triquiWinnerId,
+    gameState.score,
+    currentQuestion,
+    triviaCorrect,
+    updateGameState,
   ])
 
   useEffect(() => {
@@ -428,48 +475,6 @@ export function GameView({ roomId }: { roomId: string }) {
       }, 5000)
     }
 
-    // Si la fase es Question y la respuesta ya fue revelada, esperar 5s y volver a Triqui
-    if (
-      (gameState.phase === 'QUESTION' || gameState.phase === 'STEAL_ATTEMPT') &&
-      gameState.questionRevealed
-    ) {
-      const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
-      timeout = window.setTimeout(() => {
-        if (!currentQuestion) return
-        const isCorrect = gameState.questionAnswer === currentQuestion.correct_index
-        const newScore = { ...gameState.score }
-        
-        if (isCorrect && gameState.triquiWinnerId) {
-          newScore[gameState.triquiWinnerId] = (newScore[gameState.triquiWinnerId] || 0) + 100
-        }
-
-        const nextIndex = (gameState.currentQuestionIndex ?? 0) + 1
-        const hasMoreQuestions = nextIndex < questions.length
-
-        if (hasMoreQuestions) {
-          updateGameState({
-            phase: 'TRIQUI',
-            board: Array(9).fill(null),
-            turn: gameState.playerO, // Alternar inicio de ronda
-            score: newScore,
-            currentQuestionIndex: nextIndex,
-            triquiWinnerId: null,
-            questionAnswer: null,
-            questionRevealed: false,
-            timerStartTimestamp: null,
-            timerDurationMs: null,
-          })
-        } else {
-          updateGameState({
-            phase: 'RESULTS',
-            score: newScore,
-            timerStartTimestamp: null,
-            timerDurationMs: null,
-          })
-        }
-      }, 5000)
-    }
-
     return () => {
       if (timeout) window.clearTimeout(timeout)
     }
@@ -530,7 +535,6 @@ export function GameView({ roomId }: { roomId: string }) {
   }
 
   let content = null
-  const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
 
   if (loading) {
     content = (
@@ -557,6 +561,91 @@ export function GameView({ roomId }: { roomId: string }) {
             Esperando a que el Host cierre la sesión...
           </div>
         )}
+      </div>
+    )
+  } else if (gameState.phase === 'ROUND_RESULTS') {
+    const aPlayer = players.find((p) => p.id === gameState.playerX) ?? null
+    const bPlayer = players.find((p) => p.id === gameState.playerO) ?? null
+    const prevScore = gameState.roundPrevScore ?? {}
+    const maxScore = Math.max(1, questions.length * triviaCorrect)
+    const awardedTo = gameState.roundAwardedToId ?? null
+    const awardedName = awardedTo
+      ? players.find((p) => p.id === awardedTo)?.name ?? '—'
+      : null
+    const wasSteal = Boolean(gameState.roundWasSteal)
+
+    const nextIndex = (gameState.currentQuestionIndex ?? 0) + 1
+    const hasMoreQuestions = nextIndex < questions.length
+
+    content = (
+      <div key="round-results" className="flex flex-1 flex-col items-center bg-stone-50 px-4 py-8 text-slate-900 h-full w-full">
+        <main className="flex w-full max-w-md flex-col gap-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">
+              {awardedName ? `¡PUNTO PARA ${awardedName}!` : 'NADIE SUMÓ ESTA VEZ'}
+            </h1>
+            {wasSteal && awardedName ? (
+              <div className="mt-3 inline-flex rounded-full bg-amber-100 px-4 py-1 text-xs font-black text-amber-800">
+                ¡Gran Robo!
+              </div>
+            ) : wasSteal ? (
+              <div className="mt-3 inline-flex rounded-full bg-stone-200 px-4 py-1 text-xs font-black text-stone-700">
+                Robo fallido
+              </div>
+            ) : null}
+          </div>
+
+          <RoundScoreboard
+            playerA={aPlayer}
+            playerB={bPlayer}
+            prevScore={prevScore}
+            score={gameState.score}
+            maxScore={maxScore}
+            awardedToId={awardedTo}
+          />
+
+          {isHost ? (
+            <button
+              className="w-full rounded-xl bg-slate-900 px-4 py-3 font-bold text-white shadow-sm"
+              onClick={() => {
+                playClick()
+                if (!hasMoreQuestions) {
+                  updateGameState({
+                    phase: 'RESULTS',
+                    roundPrevScore: null,
+                    roundAwardedToId: null,
+                    roundWasSteal: null,
+                    timerStartTimestamp: null,
+                    timerDurationMs: null,
+                  })
+                  return
+                }
+                updateGameState({
+                  phase: 'TRIQUI',
+                  board: Array(9).fill(null),
+                  turn: gameState.playerO,
+                  currentQuestionIndex: nextIndex,
+                  triquiWinnerId: null,
+                  questionAnswer: null,
+                  questionRevealed: false,
+                  questionStartedAt: null,
+                  questionAnsweredAt: null,
+                  roundPrevScore: null,
+                  roundAwardedToId: null,
+                  roundWasSteal: null,
+                  timerStartTimestamp: null,
+                  timerDurationMs: null,
+                })
+              }}
+            >
+              {hasMoreQuestions ? 'Siguiente Ronda' : 'Ver Resultados Finales'}
+            </button>
+          ) : (
+            <div className="text-center text-sm text-stone-500">
+              Esperando al Host…
+            </div>
+          )}
+        </main>
       </div>
     )
   } else if ((gameState.phase === 'QUESTION' || gameState.phase === 'STEAL_ATTEMPT') && currentQuestion) {
@@ -639,51 +728,7 @@ export function GameView({ roomId }: { roomId: string }) {
                 >
                   Revelar Respuesta
                 </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    playClick()
-                    const isCorrect = gameState.questionAnswer === currentQuestion.correct_index
-                    const newScore = { ...gameState.score }
-                    
-                    if (isCorrect && gameState.triquiWinnerId) {
-                      newScore[gameState.triquiWinnerId] = (newScore[gameState.triquiWinnerId] || 0) + 100
-                    }
-
-                    const nextIndex = (gameState.currentQuestionIndex ?? 0) + 1
-                    const hasMoreQuestions = nextIndex < questions.length
-
-                    if (hasMoreQuestions) {
-                      updateGameState({
-                        phase: 'TRIQUI',
-                        board: Array(9).fill(null),
-                        turn: gameState.playerO, // Alternar inicio de ronda
-                        score: newScore,
-                        currentQuestionIndex: nextIndex,
-                        triquiWinnerId: null,
-                        questionAnswer: null,
-                        questionRevealed: false,
-                        questionStartedAt: null,
-                        questionAnsweredAt: null,
-                        timerStartTimestamp: null,
-                        timerDurationMs: null,
-                      })
-                    } else {
-                      updateGameState({
-                        phase: 'RESULTS',
-                        score: newScore,
-                        timerStartTimestamp: null,
-                        timerDurationMs: null,
-                      })
-                    }
-                  }}
-                  className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white shadow-sm"
-                >
-                  {((gameState.currentQuestionIndex ?? 0) + 1 < questions.length)
-                    ? 'Siguiente Ronda de Triqui'
-                    : 'Finalizar y ver Resultados'}
-                </button>
-              )}
+              ) : null}
             </div>
           ) : null}
         </main>

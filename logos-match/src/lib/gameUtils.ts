@@ -1,4 +1,11 @@
-export type GamePhase = 'LOBBY' | 'TRIQUI' | 'QUESTION' | 'STEAL_ATTEMPT' | 'RESULTS' | 'ENDED'
+export type GamePhase =
+  | 'LOBBY'
+  | 'TRIQUI'
+  | 'QUESTION'
+  | 'STEAL_ATTEMPT'
+  | 'ROUND_RESULTS'
+  | 'RESULTS'
+  | 'ENDED'
 
 export type GameState = {
   phase: GamePhase
@@ -15,6 +22,9 @@ export type GameState = {
   questionAnsweredAt?: number | null
   timerStartTimestamp?: number | null
   timerDurationMs?: number | null
+  roundPrevScore?: Record<string, number> | null
+  roundAwardedToId?: string | null
+  roundWasSteal?: boolean | null
 }
 
 export type WinResult = {
