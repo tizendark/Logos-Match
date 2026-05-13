@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { motion } from 'framer-motion'
 
 import { TicTacToeBoard } from '@/components/TicTacToeBoard'
 import { useGameState } from '@/hooks/useGameState'
@@ -47,8 +48,13 @@ export function GameView({ roomId }: { roomId: string }) {
         ? rawTiming.roundAnswerMs
         : DEFAULT_GAME_CONFIG.timing.roundAnswerMs
 
+  const timerRequestInFlightRef = useRef(false)
+
   async function startTimer(durationMs: number) {
     if (!isHost || !hostToken) return
+    if (timerRequestInFlightRef.current) return
+    if (!durationMs) return
+    timerRequestInFlightRef.current = true
     try {
       const res = await fetch(`/api/rooms/${roomId}/timer`, {
         method: 'POST',
@@ -70,6 +76,8 @@ export function GameView({ roomId }: { roomId: string }) {
       }
     } catch {
       return
+    } finally {
+      timerRequestInFlightRef.current = false
     }
   }
 
@@ -88,6 +96,11 @@ export function GameView({ roomId }: { roomId: string }) {
     }
   )
 
+  const gameStateRef = useRef(gameState)
+  useEffect(() => {
+    gameStateRef.current = gameState
+  }, [gameState])
+
   // Efecto para sonidos de victoria y resultados de trivia
   const [prevPhase, setPrevPhase] = useState(gameState.phase)
   const [prevRevealed, setPrevRevealed] = useState(gameState.questionRevealed)
@@ -101,26 +114,36 @@ export function GameView({ roomId }: { roomId: string }) {
   }, [gameState.phase, prevPhase, playWin])
 
   useEffect(() => {
+    if (gameState.phase === 'STEAL_ATTEMPT' && prevPhase !== 'STEAL_ATTEMPT') {
+      playWrong()
+    }
+  }, [gameState.phase, prevPhase, playWrong])
+
+  useEffect(() => {
     if (gameState.questionRevealed && !prevRevealed) {
       const currentQ = questions[gameState.currentQuestionIndex ?? 0]
       if (currentQ && gameState.questionAnswer === currentQ.correct_index) {
-        const startedAt = gameState.questionStartedAt ?? null
-        const answeredAt = gameState.questionAnsweredAt ?? null
-        const elapsed = typeof startedAt === 'number' && typeof answeredAt === 'number'
-          ? answeredAt - startedAt
-          : null
-        const perfectWindowMs = Math.round(DEFAULT_GAME_CONFIG.timing.roundAnswerMs * 0.15)
-        if (typeof elapsed === 'number' && elapsed <= perfectWindowMs) {
-          playCorrectPerfect()
-        } else {
+        if (gameState.phase === 'STEAL_ATTEMPT') {
           playCorrect()
+        } else {
+          const startedAt = gameState.questionStartedAt ?? null
+          const answeredAt = gameState.questionAnsweredAt ?? null
+          const elapsed = typeof startedAt === 'number' && typeof answeredAt === 'number'
+            ? answeredAt - startedAt
+            : null
+          const perfectWindowMs = Math.round(DEFAULT_GAME_CONFIG.timing.roundAnswerMs * 0.15)
+          if (typeof elapsed === 'number' && elapsed <= perfectWindowMs) {
+            playCorrectPerfect()
+          } else {
+            playCorrect()
+          }
         }
       } else if (currentQ) {
         playWrong()
       }
     }
     setPrevRevealed(gameState.questionRevealed)
-  }, [gameState.questionRevealed, prevRevealed, gameState.questionAnswer, gameState.currentQuestionIndex, questions, playCorrect, playCorrectPerfect, playWrong, gameState.questionStartedAt, gameState.questionAnsweredAt])
+  }, [gameState.questionRevealed, prevRevealed, gameState.questionAnswer, gameState.currentQuestionIndex, questions, playCorrect, playCorrectPerfect, playWrong, gameState.questionStartedAt, gameState.questionAnsweredAt, gameState.phase])
 
   useEffect(() => {
     if (gameState.phase === 'TRIQUI' && gameState.turn) {
@@ -221,6 +244,14 @@ export function GameView({ roomId }: { roomId: string }) {
         void startTimer(questionDurationMs)
       }
     }
+
+    if (gameState.phase === 'STEAL_ATTEMPT') {
+      if (gameState.questionRevealed) return
+      if (gameState.questionAnswer !== null) return
+      if (!gameState.timerStartTimestamp || !gameState.timerDurationMs) {
+        void startTimer(5000)
+      }
+    }
   }, [
     isHost,
     winResult.winner,
@@ -245,11 +276,13 @@ export function GameView({ roomId }: { roomId: string }) {
     if (remaining <= 0) return
 
     const timeoutId = window.setTimeout(() => {
-      if (winResult.winner || winResult.isDraw) return
+      const latest = gameStateRef.current
+      const latestWin = checkWinner(latest.board)
+      if (latestWin.winner || latestWin.isDraw) return
 
-      if (gameState.phase === 'TRIQUI' && gameState.turn) {
+      if (latest.phase === 'TRIQUI' && latest.turn) {
         const nextTurn =
-          gameState.turn === gameState.playerX ? gameState.playerO : gameState.playerX
+          latest.turn === latest.playerX ? latest.playerO : latest.playerX
         updateGameState({
           turn: nextTurn ?? null,
           timerStartTimestamp: null,
@@ -259,9 +292,36 @@ export function GameView({ roomId }: { roomId: string }) {
         return
       }
 
-      if (gameState.phase === 'QUESTION') {
-        if (gameState.questionRevealed) return
-        if (gameState.questionAnswer !== null) return
+      if (latest.phase === 'QUESTION') {
+        if (latest.questionRevealed) return
+        if (latest.questionAnswer !== null) return
+
+        window.setTimeout(() => {
+          const again = gameStateRef.current
+          if (again.phase !== 'QUESTION') return
+          if (again.questionRevealed) return
+          if (again.questionAnswer !== null) return
+
+          const stealerId =
+            again.triquiWinnerId === again.playerX ? again.playerO : again.playerX
+
+          updateGameState({
+            phase: 'STEAL_ATTEMPT',
+            triquiWinnerId: stealerId ?? null,
+            questionAnswer: null,
+            questionAnsweredAt: null,
+            questionRevealed: false,
+            timerStartTimestamp: null,
+            timerDurationMs: null,
+          })
+          void startTimer(5000)
+        }, 500)
+        return
+      }
+
+      if (latest.phase === 'STEAL_ATTEMPT') {
+        if (latest.questionRevealed) return
+        if (latest.questionAnswer !== null) return
         updateGameState({
           questionRevealed: true,
           timerStartTimestamp: null,
@@ -369,7 +429,10 @@ export function GameView({ roomId }: { roomId: string }) {
     }
 
     // Si la fase es Question y la respuesta ya fue revelada, esperar 5s y volver a Triqui
-    if (gameState.phase === 'QUESTION' && gameState.questionRevealed) {
+    if (
+      (gameState.phase === 'QUESTION' || gameState.phase === 'STEAL_ATTEMPT') &&
+      gameState.questionRevealed
+    ) {
       const currentQuestion = questions[gameState.currentQuestionIndex ?? 0]
       timeout = window.setTimeout(() => {
         if (!currentQuestion) return
@@ -433,7 +496,7 @@ export function GameView({ roomId }: { roomId: string }) {
       return
     }
 
-    if (gameState.phase !== 'QUESTION') return
+    if (gameState.phase !== 'QUESTION' && gameState.phase !== 'STEAL_ATTEMPT') return
     if (gameState.questionRevealed) return
     if (gameState.triquiWinnerId !== answerPlayerId) return
 
@@ -496,12 +559,25 @@ export function GameView({ roomId }: { roomId: string }) {
         )}
       </div>
     )
-  } else if (gameState.phase === 'QUESTION' && currentQuestion) {
+  } else if ((gameState.phase === 'QUESTION' || gameState.phase === 'STEAL_ATTEMPT') && currentQuestion) {
     const triquiWinnerName =
       players.find((p) => p.id === gameState.triquiWinnerId)?.name || 'Jugador'
 
+    const isStealAttempt = gameState.phase === 'STEAL_ATTEMPT'
+
     content = (
-      <div key="question" className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-8 text-zinc-950 h-full w-full">
+      <motion.div
+        key="question"
+        className={`flex flex-1 flex-col items-center px-4 py-8 text-zinc-950 h-full w-full ${
+          isStealAttempt ? 'bg-amber-50' : 'bg-zinc-50'
+        }`}
+        animate={
+          isStealAttempt
+            ? { backgroundColor: ['#FFFBEB', '#FEF3C7', '#FFFBEB'] }
+            : undefined
+        }
+        transition={isStealAttempt ? { duration: 0.9, repeat: Infinity } : undefined}
+      >
         <main className="flex w-full max-w-md flex-col gap-6">
           <div className="flex items-center justify-between">
             <ScoreBoard players={players} score={gameState.score} />
@@ -529,6 +605,7 @@ export function GameView({ roomId }: { roomId: string }) {
           <GameTimer
             startTimestamp={gameState.timerStartTimestamp ?? null}
             durationMs={gameState.timerDurationMs ?? null}
+            variant={isStealAttempt ? 'steal' : 'normal'}
             playTick={playClick}
             playBuzzer={playWrong}
           />
@@ -539,6 +616,7 @@ export function GameView({ roomId }: { roomId: string }) {
             triquiWinnerId={gameState.triquiWinnerId ?? null}
             triquiWinnerName={triquiWinnerName}
             isHost={isHost}
+            mode={isStealAttempt ? 'steal' : 'question'}
             answer={gameState.questionAnswer ?? null}
             revealed={gameState.questionRevealed ?? false}
             onAnswer={(index) => handleAnswer(index, isHost ? (gameState.triquiWinnerId ?? null) : playerId)}
@@ -609,7 +687,7 @@ export function GameView({ roomId }: { roomId: string }) {
             </div>
           ) : null}
         </main>
-      </div>
+      </motion.div>
     )
   } else {
     const playerXName =

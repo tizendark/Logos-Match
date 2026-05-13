@@ -8,6 +8,7 @@ export type QuestionViewProps = {
   triquiWinnerId: string | null
   triquiWinnerName: string
   isHost: boolean
+  mode?: 'question' | 'steal'
   answer: number | null
   revealed: boolean
   onAnswer: (index: number) => void
@@ -19,19 +20,26 @@ export function QuestionView({
   triquiWinnerId,
   triquiWinnerName,
   isHost,
+  mode = 'question',
   answer,
   revealed,
   onAnswer,
 }: QuestionViewProps) {
   const canAnswer = !isHost && playerId === triquiWinnerId && !revealed && answer === null
   const { playClick } = useGameSounds()
+  const isSteal = mode === 'steal'
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-500">
-          Pregunta para {triquiWinnerName}
+          {isSteal ? '¡OPORTUNIDAD DE ROBO!' : `Pregunta para ${triquiWinnerName}`}
         </h2>
+        {isSteal ? (
+          <p className="mt-2 text-sm font-medium text-amber-700">
+            Responde rápido: {triquiWinnerName}
+          </p>
+        ) : null}
         <p className="mt-3 text-lg font-medium leading-snug text-zinc-900">
           {question.prompt}
         </p>
@@ -69,6 +77,16 @@ export function QuestionView({
                 hidden: { opacity: 0, y: 20 },
                 visible: { opacity: 1, y: 0, transition: { type: 'spring', bounce: 0.4 } },
               }}
+              animate={
+                isSteal && canAnswer && !revealed
+                  ? { x: [0, -2, 2, -2, 2, 0] }
+                  : undefined
+              }
+              transition={
+                isSteal && canAnswer && !revealed
+                  ? { duration: 0.7, repeat: Infinity }
+                  : undefined
+              }
               type="button"
               whileTap={canAnswer ? { scale: 0.92 } : undefined}
               disabled={!canAnswer || revealed}
@@ -104,7 +122,7 @@ export function QuestionView({
 
       {!isHost && playerId !== triquiWinnerId && !revealed ? (
         <p className="text-center text-sm text-zinc-500">
-          Esperando a que {triquiWinnerName} responda...
+          {isSteal ? `¡${triquiWinnerName} está intentando robar!` : `Esperando a que ${triquiWinnerName} responda...`}
         </p>
       ) : null}
     </div>

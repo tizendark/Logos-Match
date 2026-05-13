@@ -10,11 +10,18 @@ function clamp(v: number, min: number, max: number) {
 export type GameTimerProps = {
   startTimestamp: number | null
   durationMs: number | null
+  variant?: 'normal' | 'steal'
   playTick?: () => void
   playBuzzer?: () => void
 }
 
-export function GameTimer({ startTimestamp, durationMs, playTick, playBuzzer }: GameTimerProps) {
+export function GameTimer({
+  startTimestamp,
+  durationMs,
+  variant = 'normal',
+  playTick,
+  playBuzzer,
+}: GameTimerProps) {
   const [now, setNow] = useState(() => Date.now())
   const lastSecondRef = useRef<number | null>(null)
   const buzzedRef = useRef(false)
@@ -61,25 +68,32 @@ export function GameTimer({ startTimestamp, durationMs, playTick, playBuzzer }: 
   if (!startTimestamp || !durationMs) return null
 
   const isDanger = percent <= 0.25
+  const isSteal = variant === 'steal'
+  const pulse = isSteal || isDanger
 
   return (
     <motion.div
       className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm"
-      animate={isDanger ? { scale: [1, 1.02, 1] } : { scale: 1 }}
-      transition={isDanger ? { duration: 0.35, repeat: Infinity } : { duration: 0.2 }}
+      animate={pulse ? { scale: [1, 1.03, 1] } : { scale: 1 }}
+      transition={pulse ? { duration: isSteal ? 0.22 : 0.35, repeat: Infinity } : { duration: 0.2 }}
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">
           Tiempo
         </span>
-        <span className={`text-sm font-black ${isDanger ? 'text-red-600' : 'text-slate-900'}`}>
+        <motion.span
+          key={remainingSeconds}
+          className={`text-sm font-black ${pulse ? 'text-red-600' : 'text-slate-900'}`}
+          animate={isSteal ? { scale: [1, 1.22, 1] } : { scale: 1 }}
+          transition={isSteal ? { duration: 0.18 } : { duration: 0.2 }}
+        >
           {remainingSeconds}s
-        </span>
+        </motion.span>
       </div>
 
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-stone-100">
         <motion.div
-          className={`h-full ${isDanger ? 'bg-red-500' : 'bg-emerald-500'}`}
+          className={`h-full ${pulse ? 'bg-red-500' : 'bg-emerald-500'}`}
           animate={{ width: `${Math.round(percent * 100)}%` }}
           transition={{ ease: 'linear', duration: 0.12 }}
         />
@@ -87,4 +101,3 @@ export function GameTimer({ startTimestamp, durationMs, playTick, playBuzzer }: 
     </motion.div>
   )
 }
-

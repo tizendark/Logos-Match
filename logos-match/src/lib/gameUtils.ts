@@ -1,4 +1,4 @@
-export type GamePhase = 'LOBBY' | 'TRIQUI' | 'QUESTION' | 'RESULTS' | 'ENDED'
+export type GamePhase = 'LOBBY' | 'TRIQUI' | 'QUESTION' | 'STEAL_ATTEMPT' | 'RESULTS' | 'ENDED'
 
 export type GameState = {
   phase: GamePhase
